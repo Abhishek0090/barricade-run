@@ -6,7 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Barricade Run",
     short_name: "Barricade Run",
-    description: "Endless runner: escape the police, the barricades and the detention bus.",
+    description: "Protest runner: dodge police barricades, riot police and the detention bus, and grab the coins.",
     start_url: "/",
     scope: "/",
     display: "fullscreen",

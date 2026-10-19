@@ -44,17 +44,48 @@ export const OBSTACLE = {
   bus: { w: 2.3, h: 3.1, len: 11 },
 } as const;
 
+/** Hand-held placards: English, Hinglish and Hindi slogans of the street protest. */
 export const PLACARDS = [
-  "HEAR US",
-  "JUSTICE NOW",
-  "OUR VOICE",
-  "STAND UP",
-  "NO MORE",
-  "EQUAL RIGHTS",
-  "FREE SPEECH",
-  "WE WANT JOBS",
-  "PEACE",
-  "SAVE OUR CITY",
-  "ENOUGH!",
-  "UNITY",
+  "STOP PAPER LEAK",
+  "RE-NEET NOW",
+  "JUSTICE FOR NEET STUDENTS",
+  "OUR FUTURE IS NOT FOR SALE",
+  "STOP VOTE CHORI",
+  "WHERE IS MY VOTE?",
+  "SAVE DEMOCRACY",
+  "NO MORE DHANDLI",
+  "END CORRUPTION",
+  "EVERY VOTE COUNTS",
+  "VOTE CHORI BAND KARO",
+  "NEET PHIR SE KARAO",
+  "DHANDLI NAHI CHALEGI",
+  "HUMEIN JAWAB CHAHIYE",
+  "पेपर लीक बंद करो",
+  "वोट चोरी बंद करो",
+  "भ्रष्टाचार बंद करो",
+  "छात्रों को न्याय दो",
+  "धांधली नहीं चलेगी",
 ];
+
+/** Cloth banners carried across the sidewalk by two marchers. */
+export const BANNERS = [
+  "NEET PAPER LEAK: RE-EXAM NOW",
+  "STOP VOTE CHORI • SAVE DEMOCRACY",
+  "STUDENTS AGAINST CORRUPTION",
+  "छात्र एकता ज़िंदाबाद",
+  "वोट चोरी बंद करो",
+  "OUR VOTE, OUR RIGHT",
+  "PAPER LEAK = BETRAYAL OF STUDENTS",
+];
+
+/** Hoardings on the buildings: [header, headline]. */
+export const BILLBOARDS: [string, string][] = [
+  ["BREAKING", "NEET PAPER LEAKED"],
+  ["ASK THEM", "WHO STOLE MY VOTE?"],
+  ["BREAKING", "RE-NEET NOW, SAY STUDENTS"],
+  ["आज की ख़बर", "पेपर लीक पर हंगामा"],
+  ["BREAKING", "VOTE CHORI ALLEGED"],
+  ["DEMAND", "CORRUPTION-FREE EXAMS"],
+];
+
+export const FONT = 'system-ui, "Segoe UI", "Nirmala UI", "Noto Sans Devanagari", "Kohinoor Devanagari", sans-serif';

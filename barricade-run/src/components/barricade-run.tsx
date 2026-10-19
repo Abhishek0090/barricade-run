@@ -13,12 +13,21 @@ import { useInstallPrompt, useIosInstallHint } from "./pwa";
 type Screen = "home" | "playing" | "paused" | "crashed" | "over";
 
 const CRASH_TEXT: Record<CrashReason, string> = {
-  barricade: "You smashed into a barricade.",
-  banner: "The police line got you. Crouch under it next time.",
-  police: "You ran straight into the police.",
-  bus: "You ended up in the detention bus.",
-  caught: "The police caught up with you.",
+  barricade: "You crashed into a police barricade.",
+  banner: "Stopped at the police line. Crouch under it next time.",
+  police: "The riot police blocked your way.",
+  bus: "Detained! You were pushed into the police bus.",
+  caught: "The police caught you. The protest goes on without you... for now.",
 };
+
+const HEADLINES = [
+  "Students march against the NEET paper leak",
+  'Aspirants demand "Re-NEET now"',
+  "Protesters allege vote chori and dhandli in the elections",
+  "Thousands on the streets demanding answers on corruption",
+  "Police put up barricades across the city",
+  "Detention buses lined up near the march",
+];
 
 interface Result {
   score: number;
@@ -127,12 +136,20 @@ export function BarricadeRun() {
   // Render loop. Runs for the whole lifetime of the page; the home screen shows an autopilot demo run.
   useEffect(() => {
     const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
+    // Opaque canvas: the browser can skip blending it with the page behind.
+    const ctx = canvas?.getContext("2d", { alpha: false });
     if (!canvas || !ctx) return;
     demoRef.current = new Game({}, true);
 
+    // Render resolution. Starts at the screen's pixel density (capped lower on phones, where fill
+    // rate is the bottleneck) and steps down automatically if the device can't keep up.
+    const coarse = window.matchMedia("(pointer: coarse)").matches;
+    let scale = Math.min(window.devicePixelRatio || 1, coarse ? 1.5 : 2);
+    let slowFrames = 0;
+    let sampled = 0;
+
     const resize = () => {
-      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const dpr = scale;
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
       canvas.width = Math.round(w * dpr);
@@ -151,11 +168,26 @@ export function BarricadeRun() {
     let lastHud = 0;
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
-      const dt = Math.min(0.05, (now - last) / 1000);
+      const elapsed = now - last;
+      const dt = Math.min(0.05, elapsed / 1000);
       last = now;
       const s = screenRef.current;
       const game = s === "home" ? demoRef.current : gameRef.current;
       const live = s === "home" || s === "playing";
+
+      // Every 90 animated frames: if most ran slower than ~45 fps, drop the resolution one step.
+      if (live && !document.hidden && elapsed < 250) {
+        sampled++;
+        if (elapsed > 22) slowFrames++;
+        if (sampled >= 90) {
+          if (slowFrames > 45 && scale > 0.75) {
+            scale = Math.max(0.75, scale - 0.25);
+            resize();
+          }
+          sampled = 0;
+          slowFrames = 0;
+        }
+      }
       if (live) clock += dt;
       if (game && viewRef.current) {
         if (live) game.update(dt);
@@ -263,7 +295,7 @@ export function BarricadeRun() {
             <div className="hud-stats">
               <span className="hud-score" aria-label="Score">{hud.score.toLocaleString()}</span>
               <span className="hud-coins" aria-label="Coins">
-                <span className="coin-dot" aria-hidden /> {hud.coins}
+                <span className="coin-icon" aria-hidden /> {hud.coins}
               </span>
             </div>
             <div className="hud-right">
@@ -281,40 +313,62 @@ export function BarricadeRun() {
           </div>
           {hud.chase && <div className="chase-banner">POLICE ON YOUR TAIL!</div>}
 
-          <div className="touch-controls">
-            <div className="pad">
-              <button type="button" className="pad-btn" aria-label="Move left" data-action="left" onPointerDown={onControl}>
-                ◀
-              </button>
-              <button type="button" className="pad-btn" aria-label="Move right" data-action="right" onPointerDown={onControl}>
-                ▶
-              </button>
-            </div>
-            <div className="pad pad-vertical">
-              <button type="button" className="pad-btn" aria-label="Jump" data-action="jump" onPointerDown={onControl}>
-                ▲
-              </button>
-              <button type="button" className="pad-btn" aria-label="Crouch" data-action="crouch" onPointerDown={onControl}>
-                ▼
-              </button>
-            </div>
+          <div className="touch-controls" role="group" aria-label="Game controls">
+            <button type="button" className="pad-btn pad-up" data-action="jump" onPointerDown={onControl}>
+              <span aria-hidden>▲</span>
+              <span className="pad-label">JUMP</span>
+            </button>
+            <button type="button" className="pad-btn pad-left" data-action="left" onPointerDown={onControl}>
+              <span aria-hidden>◀</span>
+              <span className="pad-label">LEFT</span>
+            </button>
+            <button type="button" className="pad-btn pad-right" data-action="right" onPointerDown={onControl}>
+              <span aria-hidden>▶</span>
+              <span className="pad-label">RIGHT</span>
+            </button>
+            <button type="button" className="pad-btn pad-down" data-action="crouch" onPointerDown={onControl}>
+              <span aria-hidden>▼</span>
+              <span className="pad-label">CROUCH</span>
+            </button>
           </div>
         </>
       )}
 
       {screen === "home" && (
         <section className="overlay home" aria-labelledby="title">
+          <div className="ticker" aria-label="News headlines">
+            <span className="ticker-tag">BREAKING</span>
+            <div className="ticker-window">
+              <div className="ticker-track">
+                {[0, 1].map((copy) => (
+                  <span key={copy} aria-hidden={copy === 1}>
+                    {HEADLINES.map((h) => (
+                      <span key={h} className="ticker-item">
+                        {h}
+                      </span>
+                    ))}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
           <div className="panel">
-            <p className="eyebrow">Escape the crackdown</p>
+            <p className="eyebrow">Paper leak • Vote chori • Corruption</p>
             <h1 id="title" className="title">
               BARRICADE<span>RUN</span>
             </h1>
-            <p className="tagline">Dodge the barricades, the police line and the detention bus. Keep running.</p>
+            <p className="tagline">
+              The NEET paper leaked. Votes were stolen. The streets are full. Run with the protest, dodge the
+              barricades, riot police and the detention bus, and grab the coins on the way.
+            </p>
             <button type="button" className="play-btn" onClick={start} autoFocus>
               ▶ PLAY
             </button>
             {best > 0 && <p className="best">Best: {best.toLocaleString()}</p>}
             <p className="lifeline-note">♥ Every run comes with 1 free lifeline. Grab hearts on the road for more.</p>
+            <p className="coin-note">
+              <span className="coin-icon" aria-hidden /> Collect coins on the road (+10 each).
+            </p>
 
             <div className="controls-help">
               <div className="help-keys">
@@ -329,8 +383,9 @@ export function BarricadeRun() {
               <div className="help-touch">
                 <h2>Mobile</h2>
                 <ul>
-                  <li>◀ ▶ buttons change lane</li>
-                  <li>▲ jump, ▼ crouch</li>
+                  <li>Buttons on the right side:</li>
+                  <li><b>LEFT</b> / <b>RIGHT</b> change lane</li>
+                  <li><b>JUMP</b> over barricades, <b>CROUCH</b> under the police line</li>
                   <li>or swipe in any direction</li>
                 </ul>
               </div>

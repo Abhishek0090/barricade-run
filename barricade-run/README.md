@@ -1,8 +1,11 @@
 # Barricade Run
 
-Endless 3-lane runner in the style of Subway Surfers. You run down a road lined with protesters and
-dodge police barricades, police lines, officers with riot shields and detention buses, while the
-police chase you. Plays on laptop and mobile and installs as a PWA that works offline.
+Endless 3-lane runner in the style of Subway Surfers, set in a street protest against the NEET paper
+leak, election "vote chori" / dhandli and corruption. The sidewalks are full of marchers with placards,
+banners and tricolours (slogans in English, Hinglish and Hindi), leaked exam papers blow across the road,
+and the police chase you. Dodge barricades, the police line, riot police and detention buses, and collect
+coins. Plays on laptop and mobile and installs as a PWA that works offline.
+No real politicians or parties are named.
 
 Stack: Next.js 16 (App Router, static export), React 19, TypeScript, HTML canvas. No game engine and
 no image or audio files: the scene is drawn with canvas shapes and the sounds are synthesised with Web Audio.
@@ -20,9 +23,9 @@ npm start          # serve ./out (service worker and install work here)
 
 | Action | Laptop / PC | Mobile |
 | --- | --- | --- |
-| Change lane | Left/Right arrows or A/D | Left/Right buttons or swipe |
-| Jump (clear barricades) | Up arrow, W or Space | Jump button or swipe up |
-| Crouch / slide (under the police line) | Down arrow or S | Crouch button or swipe down |
+| Change lane | Left/Right arrows or A/D | LEFT / RIGHT buttons (right side) or swipe |
+| Jump (clear barricades) | Up arrow, W or Space | JUMP button or swipe up |
+| Crouch / slide (under the police line) | Down arrow or S | CROUCH button or swipe down |
 | Pause | P or Esc | Pause button |
 
 - Officers and detention buses can only be avoided by changing lane. Some buses drive towards you.
@@ -39,7 +42,7 @@ npm start          # serve ./out (service worker and install work here)
 | `src/game/engine.ts` | Rules: movement, spawning, collisions, chase, lifelines |
 | `src/game/render.ts` | Pseudo-3D canvas renderer |
 | `src/game/audio.ts` | Web Audio sound effects and siren |
-| `src/game/constants.ts` | Tuning values (speeds, sizes, timings) |
+| `src/game/constants.ts` | Tuning values and the protest slogans, banners and billboards |
 | `src/components/barricade-run.tsx` | Screens, HUD, keyboard, touch and swipe input |
 | `src/components/pwa.tsx` | Service worker registration and install prompt |
 | `src/app/manifest.ts`, `public/sw.js` | PWA manifest and offline cache |

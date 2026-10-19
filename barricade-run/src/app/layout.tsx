@@ -4,7 +4,7 @@ import { ServiceWorker } from "@/components/pwa";
 
 import "./globals.css";
 
-const description = "Run through the protest, dodge police barricades and the detention bus. Plays on laptop and mobile, works offline.";
+const description = "Run with the street protest against the NEET paper leak, vote chori and corruption. Dodge police barricades, riot police and the detention bus. Plays on laptop and mobile, works offline.";
 
 export const metadata: Metadata = {
   title: "Barricade Run",

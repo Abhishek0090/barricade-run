@@ -12,6 +12,7 @@ import {
   type Lane,
   MAX_LIFELINES,
   MAX_SPEED,
+  BANNERS,
   OBSTACLE,
   PLACARDS,
   PLAYER_H,
@@ -45,16 +46,42 @@ export interface Pickup {
   taken: boolean;
 }
 
+export type ProtesterKind = "student" | "woman" | "elder" | "flag";
+
 export interface Protester {
+  kind: ProtesterKind;
   side: -1 | 1;
   x: number;
   z: number;
   shirt: string;
+  pants: string;
   skin: string;
+  hair: string;
+  dupatta: string | null;
+  backpack: boolean;
   sign: string | null;
-  signColor: string;
+  /** [board, ink] */
+  signColors: [string, string];
   phase: number;
   height: number;
+}
+
+/** A cloth banner carried across the sidewalk by two marchers. */
+export interface StreetBanner {
+  side: -1 | 1;
+  z: number;
+  text: string;
+  cloth: string;
+  ink: string;
+}
+
+/** A leaked exam sheet blowing across the road (decoration). */
+export interface Paper {
+  x: number;
+  y: number;
+  z: number;
+  spin: number;
+  drift: number;
 }
 
 export interface Player {
@@ -80,10 +107,30 @@ export interface GameEvents {
 
 export type RunStatus = "running" | "crashed";
 
-const SHIRTS = ["#e63946", "#f4a261", "#2a9d8f", "#e9c46a", "#8338ec", "#ff006e", "#3a86ff", "#fb5607", "#06d6a0", "#ffffff"];
-const SKINS = ["#f1c27d", "#e0ac69", "#c68642", "#8d5524", "#ffdbac"];
-const SIGN_COLORS = ["#fffbe6", "#ffe066", "#ffffff", "#ffd6e0", "#c8f7c5"];
+const TEES = ["#e63946", "#2a9d8f", "#e9c46a", "#3a86ff", "#f1f1f1", "#264653", "#6c757d", "#ff006e", "#111111"];
+const KURTAS = ["#d62828", "#f77f00", "#fcbf49", "#e63995", "#7b2cbf", "#2a9d8f", "#06d6a0", "#ffafcc", "#0077b6"];
+const DUPATTAS = ["#ffd60a", "#ff70a6", "#ffffff", "#80ed99", "#ff9f1c"];
+const PANTS = ["#2b4c7e", "#1d3557", "#3d405b", "#2b2d42", "#5c4d3c"];
+const SKINS = ["#f1c27d", "#e0ac69", "#c68642", "#a5694f", "#8d5524"];
+const HAIR = ["#111111", "#1f140f", "#2b1d14", "#3b2a20"];
+const SIGN_COLORS: [string, string][] = [
+  ["#ffffff", "#c1121f"],
+  ["#ffe066", "#111111"],
+  ["#111111", "#ffd60a"],
+  ["#fffbe6", "#1d3557"],
+  ["#ff006e", "#ffffff"],
+  ["#f1f1f1", "#111111"],
+];
+const CLOTHS: [string, string][] = [
+  ["#ffffff", "#c1121f"],
+  ["#c1121f", "#ffffff"],
+  ["#111111", "#ffd60a"],
+  ["#ffd60a", "#111111"],
+  ["#1d3557", "#ffffff"],
+];
 const PROTESTER_SPAN = 150;
+const BANNER_GAP = 24;
+const PAPER_SPAN = 110;
 
 const rand = (min = 0, max = 1) => min + Math.random() * (max - min);
 const pick = <T>(items: readonly T[]): T => items[Math.floor(Math.random() * items.length)];
@@ -124,6 +171,8 @@ export class Game {
   obstacles: Obstacle[] = [];
   pickups: Pickup[] = [];
   protesters: Protester[] = [];
+  banners: StreetBanner[] = [];
+  papers: Paper[] = [];
 
   private nextRowZ = 45;
 
@@ -136,10 +185,14 @@ export class Game {
   ) {
     if (ghost) this.chaseT = 0;
     for (const side of [-1, 1] as const) {
-      for (let z = -4; z < PROTESTER_SPAN - 4; z += rand(1.1, 2.6)) {
+      for (let z = -4; z < PROTESTER_SPAN - 4; z += rand(0.9, 2.0)) {
         this.protesters.push(this.makeProtester(side, z));
       }
     }
+    for (let i = 0; i * BANNER_GAP < PROTESTER_SPAN; i++) {
+      this.banners.push(this.makeBanner(i % 2 ? 1 : -1, 12 + i * BANNER_GAP));
+    }
+    for (let i = 0; i < 18; i++) this.papers.push(this.makePaper(rand(-4, PAPER_SPAN)));
   }
 
   get score() {
@@ -227,6 +280,16 @@ export class Game {
     for (const pr of this.protesters) {
       pr.z -= dz;
       if (pr.z < -6) Object.assign(pr, this.makeProtester(pr.side, pr.z + PROTESTER_SPAN));
+    }
+    const bannerSpan = this.banners.length * BANNER_GAP;
+    for (const b of this.banners) {
+      b.z -= dz;
+      if (b.z < -6) Object.assign(b, this.makeBanner(b.side, b.z + bannerSpan));
+    }
+    for (const p of this.papers) {
+      p.z -= dz * 0.85;
+      p.x += p.drift * dt;
+      if (p.z < -5 || Math.abs(p.x) > ROAD_HALF + 3) Object.assign(p, this.makePaper(p.z < -5 ? p.z + PAPER_SPAN : p.z));
     }
     this.obstacles = this.obstacles.filter((o) => o.z + o.len > -8);
     this.pickups = this.pickups.filter((c) => c.z > -8 && !c.taken);
@@ -388,16 +451,32 @@ export class Game {
   }
 
   private makeProtester(side: -1 | 1, z: number): Protester {
+    const kind = weighted<ProtesterKind>({ student: 4, woman: 3, elder: 1.5, flag: 1 });
+    const woman = kind === "woman";
     return {
+      kind,
       side,
-      x: side * (ROAD_HALF + rand(1.4, 5.8)),
+      x: side * (ROAD_HALF + rand(1.3, 6)),
       z,
-      shirt: pick(SHIRTS),
+      shirt: kind === "elder" ? "#f1efe6" : woman ? pick(KURTAS) : pick(TEES),
+      pants: kind === "elder" ? "#e9e5d6" : woman ? pick(KURTAS) : pick(PANTS),
       skin: pick(SKINS),
-      sign: Math.random() < 0.45 ? pick(PLACARDS) : null,
-      signColor: pick(SIGN_COLORS),
+      hair: kind === "elder" ? pick(["#d9d9d9", "#9a9a9a"]) : pick(HAIR),
+      dupatta: woman && Math.random() < 0.7 ? pick(DUPATTAS) : null,
+      backpack: kind === "student" && Math.random() < 0.6,
+      sign: kind !== "flag" && Math.random() < 0.55 ? pick(PLACARDS) : null,
+      signColors: pick(SIGN_COLORS),
       phase: rand(0, Math.PI * 2),
-      height: rand(1.55, 1.85),
+      height: woman ? rand(1.5, 1.68) : rand(1.6, 1.85),
     };
+  }
+
+  private makeBanner(side: -1 | 1, z: number): StreetBanner {
+    const [cloth, ink] = pick(CLOTHS);
+    return { side, z, text: pick(BANNERS), cloth, ink };
+  }
+
+  private makePaper(z: number): Paper {
+    return { x: rand(-ROAD_HALF - 2, ROAD_HALF + 2), y: rand(0.3, 3), z, spin: rand(-4, 4), drift: rand(-1.2, 1.2) };
   }
 }

@@ -1,7 +1,9 @@
 import {
+  BILLBOARDS,
   BUILDING_X,
   CAM_BACK,
   CAM_H,
+  FONT,
   LANE_W,
   NEAR_Z,
   OBSTACLE,
@@ -10,7 +12,7 @@ import {
   SIDEWALK_END,
   VIEW_DIST,
 } from "./constants";
-import type { Game, Obstacle, Pickup, Protester } from "./engine";
+import type { Game, Obstacle, Paper, Pickup, Protester, StreetBanner } from "./engine";
 
 type Ctx = CanvasRenderingContext2D;
 type Vec3 = readonly [number, number, number];
@@ -37,7 +39,7 @@ export function makeView(w: number, h: number): View {
   const portrait = w < h;
   const focal = Math.min(h * 0.95, w * 0.85);
   const camH = portrait ? CAM_H * 1.9 : CAM_H;
-  const groundY = h * (portrait ? 0.78 : 0.82);
+  const groundY = h * (portrait ? 0.66 : 0.82);
   const horizon = groundY - (camH * focal) / CAM_BACK;
   return { w, h, cx: w / 2, focal, horizon, camH, camX: 0, backdrop: buildBackdrop(w, h, horizon) };
 }
@@ -110,10 +112,62 @@ function box(
 function text(ctx: Ctx, str: string, x: number, y: number, size: number, color: string, maxW?: number) {
   if (size < 5) return;
   ctx.fillStyle = color;
-  ctx.font = `800 ${size}px system-ui, sans-serif`;
+  ctx.font = `800 ${size}px ${FONT}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(str, x, y, maxW);
+}
+
+/** Slogan fitted into a box: one line if short, otherwise split into two at the middle space. */
+function slogan(ctx: Ctx, str: string, cx: number, cy: number, w: number, h: number, color: string) {
+  const words = str.split(" ");
+  if (str.length <= 12 || words.length < 2) {
+    text(ctx, str, cx, cy, Math.min(h * 0.5, (w / Math.max(4, str.length)) * 1.9), color, w * 0.92);
+    return;
+  }
+  let best = 1;
+  for (let i = 1; i < words.length; i++) {
+    const a = words.slice(0, i).join(" ").length;
+    const b = words.slice(i).join(" ").length;
+    const cur = Math.abs(words.slice(0, best).join(" ").length - words.slice(best).join(" ").length);
+    if (Math.abs(a - b) < cur) best = i;
+  }
+  const lines = [words.slice(0, best).join(" "), words.slice(best).join(" ")];
+  const longest = Math.max(...lines.map((l) => l.length));
+  const size = Math.min(h * 0.36, (w / Math.max(4, longest)) * 1.9);
+  text(ctx, lines[0], cx, cy - size * 0.55, size, color, w * 0.92);
+  text(ctx, lines[1], cx, cy + size * 0.55, size, color, w * 0.92);
+}
+
+/**
+ * Text is the most expensive thing to draw on a canvas, so every placard, banner and billboard is
+ * painted once into a small offscreen canvas and then stamped with drawImage each frame.
+ */
+const labels = new Map<string, HTMLCanvasElement>();
+
+function label(key: string, w: number, h: number, paint: (c: Ctx, w: number, h: number) => void) {
+  let img = labels.get(key);
+  if (!img) {
+    img = document.createElement("canvas");
+    img.width = w;
+    img.height = h;
+    const c = img.getContext("2d");
+    if (c) paint(c, w, h);
+    labels.set(key, img);
+  }
+  return img;
+}
+
+/** Board with a border and a fitted slogan. */
+function boardLabel(textStr: string, bg: string, ink: string, w: number, h: number, border = "rgba(0,0,0,0.6)") {
+  return label(`board|${textStr}|${bg}|${ink}|${w}x${h}`, w, h, (c) => {
+    c.fillStyle = bg;
+    c.fillRect(0, 0, w, h);
+    c.strokeStyle = border;
+    c.lineWidth = Math.max(2, h * 0.04);
+    c.strokeRect(0, 0, w, h);
+    slogan(c, textStr, w / 2, h / 2, w, h, ink);
+  });
 }
 
 function hash(a: number, b: number) {
@@ -179,24 +233,58 @@ function drawGround(ctx: Ctx, v: View, distance: number) {
   ctx.fillStyle = "#1c1820";
   ctx.fillRect(0, v.horizon, v.w, v.h - v.horizon);
 
+  const far = VIEW_DIST + SEG;
+  for (const side of [-1, 1]) {
+    strip(ctx, v, "#443c4a", side * (ROAD_HALF + 0.3), side * SIDEWALK_END, NEAR_Z, far, 0.15);
+    strip(ctx, v, "#222", side * ROAD_HALF, side * (ROAD_HALF + 0.3), NEAR_Z, far, 0.15);
+  }
+  strip(ctx, v, "#302e36", -ROAD_HALF, ROAD_HALF, NEAR_Z, far);
+
   const first = Math.floor((distance + NEAR_Z) / SEG);
   const last = Math.ceil((distance + VIEW_DIST) / SEG);
   for (let i = last; i >= first; i--) {
+    if (i % 2 !== 0) continue;
     const z1 = i * SEG + SEG - distance;
     const z0 = Math.max(NEAR_Z, i * SEG - distance);
     if (z1 <= z0) continue;
-    const even = i % 2 === 0;
     for (const side of [-1, 1]) {
-      strip(ctx, v, even ? "#4a4250" : "#443c4a", side * (ROAD_HALF + 0.3), side * SIDEWALK_END, z0, z1, 0.15);
-      strip(ctx, v, even ? "#ffcc00" : "#222", side * ROAD_HALF, side * (ROAD_HALF + 0.3), z0, z1, 0.15);
+      strip(ctx, v, "#4a4250", side * (ROAD_HALF + 0.3), side * SIDEWALK_END, z0, z1, 0.15);
+      strip(ctx, v, "#ffcc00", side * ROAD_HALF, side * (ROAD_HALF + 0.3), z0, z1, 0.15);
     }
-    strip(ctx, v, even ? "#34323a" : "#302e36", -ROAD_HALF, ROAD_HALF, z0, z1);
-    if (even) {
-      for (const lx of [-LANE_W / 2, LANE_W / 2]) {
-        strip(ctx, v, "rgba(255,255,255,0.7)", lx - 0.08, lx + 0.08, z0, Math.min(z1, z0 + SEG * 0.6));
-      }
+    strip(ctx, v, "#34323a", -ROAD_HALF, ROAD_HALF, z0, z1);
+    for (const lx of [-LANE_W / 2, LANE_W / 2]) {
+      strip(ctx, v, "rgba(255,255,255,0.7)", lx - 0.08, lx + 0.08, z0, Math.min(z1, z0 + SEG * 0.6));
     }
   }
+}
+
+/** News-style hoarding on the camera-facing end of a building. */
+function billboard(ctx: Ctx, v: View, side: -1 | 1, h: number, z: number, k: number) {
+  const a = project(v, side * (BUILDING_X + 1.2), h - 0.6, z);
+  const b = project(v, side * (BUILDING_X + 9), h - 4.6, z);
+  const l = Math.min(a.x, b.x);
+  const r = Math.max(a.x, b.x);
+  const t = a.y;
+  const bh = b.y - a.y;
+  if (r - l < 12) return;
+  const index = Math.floor(hash(k, side + 9) * BILLBOARDS.length);
+  const [header, headline] = BILLBOARDS[index];
+  const img = label(`billboard|${index}`, 400, 200, (c, w, h) => {
+    c.fillStyle = "#1b1b1b";
+    c.fillRect(0, 0, w, h);
+    c.fillStyle = "#f8f4ec";
+    c.fillRect(4, 4, w - 8, h - 8);
+    c.fillStyle = "#c1121f";
+    c.fillRect(4, 4, w - 8, h * 0.3);
+    text(c, header, w / 2, h * 0.17, h * 0.18, "#fff", w * 0.9);
+    slogan(c, headline, w / 2, h * 0.65, w - 8, h * 0.62, "#111");
+  });
+  ctx.drawImage(img, l, t, r - l, bh);
+  // Legs holding the hoarding.
+  ctx.fillStyle = "#1b1b1b";
+  const leg = project(v, side * (BUILDING_X + 3), h - 5.2, z);
+  ctx.fillRect(l + (r - l) * 0.2, t + bh, Math.max(1, (r - l) * 0.02), leg.y - t - bh);
+  ctx.fillRect(l + (r - l) * 0.78, t + bh, Math.max(1, (r - l) * 0.02), leg.y - t - bh);
 }
 
 const BLOCK = 14;
@@ -218,6 +306,7 @@ function drawBuildings(ctx: Ctx, v: View, distance: number) {
       poly(ctx, v, wall, [[x, 0, zn], [x, h, zn], [x, h, z1], [x, 0, z1]]);
       if (z0 >= NEAR_Z) {
         poly(ctx, v, "#2a2030", [[x, 0, z0], [side * 40, 0, z0], [side * 40, h, z0], [x, h, z0]]);
+        if (hash(k, side + 3) > 0.4 && z0 > 1 && z0 < 100) billboard(ctx, v, side, h, z0, k);
       }
       // Shop shutter at street level, windows above.
       poly(ctx, v, "#2a2a2e", [[x, 0, zn], [x, 2.6, zn], [x, 2.6, z1], [x, 0, z1]]);
@@ -226,6 +315,7 @@ function drawBuildings(ctx: Ctx, v: View, distance: number) {
         for (let wz = 1; wz < BLOCK - 3; wz += 3.4) {
           const za = z0 + wz;
           if (za < NEAR_Z) continue;
+          if ((1.5 * v.focal) / (za + CAM_BACK) < 2.5) break;
           const lit = hash(k * 7 + wy, wz + side) > 0.45;
           poly(ctx, v, lit ? "#ffd27a" : "#1e1a24", [[x, wy, za], [x, wy + 1.5, za], [x, wy + 1.5, za + 1.8], [x, wy, za + 1.8]]);
         }
@@ -241,80 +331,183 @@ interface FigureStyle {
   pants: string;
   skin: string;
   hair?: string;
-  cap?: string;
+  shoes?: string;
+  /** Seen from behind (player, chasing police). */
   back?: boolean;
   backpack?: string;
+  /** Long top: kurta / kameez. */
+  kurta?: boolean;
+  dupatta?: string | null;
+  longHair?: boolean;
+  /** White Gandhi topi. */
+  topi?: boolean;
+  /** Police peaked cap colour. */
+  cap?: string;
+  /** Riot helmet colour. */
+  helmet?: string;
+  belt?: string;
 }
 
-/** A simple person. (x, gy) is the ground point under the feet, s is pixels per metre. */
-function figure(
-  ctx: Ctx,
-  x: number,
-  gy: number,
-  s: number,
-  style: FigureStyle,
-  pose: { phase: number; height?: number; armsUp?: boolean; fist?: boolean; air?: boolean },
-) {
+interface Pose {
+  phase: number;
+  height?: number;
+  /** Both hands up holding a placard stick. */
+  armsUp?: boolean;
+  /** Right fist pumping. */
+  fist?: boolean;
+  /** Right hand up holding a flag pole. */
+  flag?: boolean;
+  /** Both hands forward at chest height holding a banner. */
+  carry?: boolean;
+  air?: boolean;
+}
+
+/** A person. (x, gy) is the ground point under the feet, s is pixels per metre. */
+function figure(ctx: Ctx, x: number, gy: number, s: number, st: FigureStyle, pose: Pose) {
   const k = s * ((pose.height ?? 1.75) / 1.75);
-  const Y = (m: number) => gy - m * k;
   const X = (m: number) => x + m * k;
+  const Y = (m: number) => gy - m * k;
   const swing = Math.sin(pose.phase);
+  const detailed = k > 14;
   ctx.lineCap = "round";
+  ctx.lineJoin = "round";
 
-  // Legs: in front/back view a running leg shows up as the foot lifting.
-  ctx.strokeStyle = style.pants;
+  // Legs and shoes. In front/back view a running leg shows up as the foot lifting.
+  ctx.strokeStyle = st.pants;
   ctx.lineWidth = 0.15 * k;
-  const liftL = pose.air ? 0.35 : Math.max(0, swing) * 0.32;
-  const liftR = pose.air ? 0.25 : Math.max(0, -swing) * 0.32;
-  for (const [lx, lift] of [[-0.1, liftL], [0.1, liftR]] as const) {
+  const lifts = pose.air ? [0.35, 0.25] : [Math.max(0, swing) * 0.32, Math.max(0, -swing) * 0.32];
+  [-0.1, 0.1].forEach((lx, i) => {
     ctx.beginPath();
-    ctx.moveTo(X(lx), Y(0.9));
-    ctx.lineTo(X(lx * 1.2), Y(lift + 0.06));
+    ctx.moveTo(X(lx), Y(0.92));
+    ctx.lineTo(X(lx * 1.15), Y(lifts[i] + 0.08));
     ctx.stroke();
-    ctx.fillStyle = "#f5f5f5";
-    ctx.fillRect(X(lx * 1.2 - 0.08), Y(lift + 0.08), 0.16 * k, 0.08 * k);
+    ctx.fillStyle = st.shoes ?? "#2b2b2b";
+    ctx.fillRect(X(lx * 1.15 - 0.09), Y(lifts[i] + 0.09), 0.18 * k, 0.09 * k);
+  });
+
+  // Long hair falls behind the shoulders (front view).
+  if (st.longHair && !st.back) {
+    ctx.fillStyle = st.hair ?? "#111";
+    ctx.beginPath();
+    ctx.roundRect(X(-0.17), Y(1.74), 0.34 * k, 0.52 * k, 0.1 * k);
+    ctx.fill();
   }
 
-  // Arms.
-  ctx.strokeStyle = style.shirt;
-  ctx.lineWidth = 0.11 * k;
+  // Torso: shoulders wider than the waist; a kurta reaches the knees.
+  const hem = st.kurta ? 0.55 : 0.88;
+  ctx.fillStyle = st.shirt;
+  ctx.beginPath();
+  ctx.moveTo(X(-0.25), Y(1.46));
+  ctx.lineTo(X(0.25), Y(1.46));
+  ctx.lineTo(X(st.kurta ? 0.25 : 0.2), Y(hem));
+  ctx.lineTo(X(st.kurta ? -0.25 : -0.2), Y(hem));
+  ctx.closePath();
+  ctx.fill();
+  // Simple shading for volume.
+  ctx.fillStyle = "rgba(0,0,0,0.13)";
+  ctx.fillRect(X(0.05), Y(1.46), 0.2 * k, (1.46 - hem) * k);
+  if (st.belt) {
+    ctx.fillStyle = st.belt;
+    ctx.fillRect(X(-0.2), Y(0.98), 0.4 * k, 0.06 * k);
+  }
+  if (st.backpack) {
+    ctx.fillStyle = st.backpack;
+    if (st.back) {
+      ctx.beginPath();
+      ctx.roundRect(X(-0.17), Y(1.42), 0.34 * k, 0.42 * k, 0.07 * k);
+      ctx.fill();
+    } else if (detailed) {
+      ctx.fillRect(X(-0.17), Y(1.45), 0.05 * k, 0.4 * k);
+      ctx.fillRect(X(0.12), Y(1.45), 0.05 * k, 0.4 * k);
+    }
+  }
+  if (st.dupatta) {
+    ctx.strokeStyle = st.dupatta;
+    ctx.lineWidth = 0.09 * k;
+    ctx.beginPath();
+    ctx.moveTo(X(-0.22), Y(1.45));
+    ctx.lineTo(X(0.2), Y(0.95));
+    ctx.stroke();
+  }
+
+  // Arms: upper arm and forearm with an elbow bend, skin-coloured hands.
+  const hands: Record<number, [number, number]> = {};
   for (const side of [-1, 1]) {
+    let hand: [number, number] = [side * 0.32, 0.98 + side * swing * 0.18];
+    if (pose.armsUp) hand = [side * 0.14, 2.02];
+    else if (pose.carry) hand = [side * 0.3, 1.28];
+    else if (pose.flag && side === 1) hand = [0.32, 1.9];
+    else if (pose.fist && side === 1) hand = [0.3, 1.72 + Math.max(0, swing) * 0.3];
+    hands[side] = hand;
+    const sx = side * 0.24;
+    const sy = 1.42;
+    const ex = (sx + hand[0]) / 2 + side * 0.09;
+    const ey = (sy + hand[1]) / 2;
+    ctx.strokeStyle = st.shirt;
+    ctx.lineWidth = 0.11 * k;
     ctx.beginPath();
-    ctx.moveTo(X(side * 0.22), Y(1.4));
-    if (pose.armsUp) ctx.lineTo(X(side * 0.18), Y(2.0));
-    else if (pose.fist && side === 1) ctx.lineTo(X(0.3), Y(1.75 + Math.max(0, swing) * 0.3));
-    else ctx.lineTo(X(side * 0.3), Y(1.0 + side * swing * 0.18));
+    ctx.moveTo(X(sx), Y(sy));
+    ctx.lineTo(X(ex), Y(ey));
+    ctx.lineTo(X(hand[0]), Y(hand[1]));
     ctx.stroke();
-  }
-
-  // Torso.
-  ctx.fillStyle = style.shirt;
-  ctx.beginPath();
-  ctx.roundRect(X(-0.23), Y(1.47), 0.46 * k, 0.6 * k, 0.08 * k);
-  ctx.fill();
-  if (style.backpack) {
-    ctx.fillStyle = style.backpack;
+    ctx.fillStyle = st.skin;
     ctx.beginPath();
-    ctx.roundRect(X(-0.16), Y(1.4), 0.32 * k, 0.38 * k, 0.06 * k);
+    ctx.arc(X(hand[0]), Y(hand[1]), 0.055 * k, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  // Head.
-  ctx.fillStyle = style.back ? (style.hair ?? "#1a1a1a") : style.skin;
+  // Neck and head.
+  ctx.fillStyle = st.skin;
+  ctx.fillRect(X(-0.05), Y(1.52), 0.1 * k, 0.08 * k);
+  ctx.fillStyle = st.back ? (st.hair ?? "#111") : st.skin;
   ctx.beginPath();
-  ctx.arc(X(0), Y(1.6), 0.13 * k, 0, Math.PI * 2);
+  ctx.ellipse(X(0), Y(1.62), 0.12 * k, 0.14 * k, 0, 0, Math.PI * 2);
   ctx.fill();
-  if (!style.back && style.hair) {
-    ctx.fillStyle = style.hair;
+  if (!st.back) {
+    ctx.fillStyle = st.hair ?? "#111";
     ctx.beginPath();
-    ctx.arc(X(0), Y(1.64), 0.13 * k, Math.PI, 0);
+    ctx.ellipse(X(0), Y(1.68), 0.125 * k, 0.09 * k, 0, Math.PI, 0);
+    ctx.fill();
+    if (detailed && !st.helmet) {
+      ctx.fillStyle = "#1a1a1a";
+      ctx.fillRect(X(-0.06), Y(1.64), 0.025 * k, 0.025 * k);
+      ctx.fillRect(X(0.035), Y(1.64), 0.025 * k, 0.025 * k);
+    }
+  }
+  if (st.longHair && st.back) {
+    ctx.fillStyle = st.hair ?? "#111";
+    ctx.fillRect(X(-0.12), Y(1.62), 0.24 * k, 0.32 * k);
+  }
+  if (st.topi) {
+    ctx.fillStyle = "#fafafa";
+    ctx.beginPath();
+    ctx.moveTo(X(-0.13), Y(1.72));
+    ctx.lineTo(X(0.13), Y(1.72));
+    ctx.lineTo(X(0.1), Y(1.82));
+    ctx.lineTo(X(-0.1), Y(1.82));
+    ctx.closePath();
     ctx.fill();
   }
-  if (style.cap) {
-    ctx.fillStyle = style.cap;
-    ctx.fillRect(X(-0.15), Y(1.78), 0.3 * k, 0.1 * k);
-    ctx.fillRect(X(-0.18), Y(1.69), 0.36 * k, 0.04 * k);
+  if (st.cap) {
+    ctx.fillStyle = st.cap;
+    ctx.beginPath();
+    ctx.roundRect(X(-0.14), Y(1.85), 0.28 * k, 0.12 * k, 0.04 * k);
+    ctx.fill();
+    ctx.fillStyle = "#1a1a1a";
+    ctx.fillRect(X(-0.15), Y(1.74), 0.3 * k, 0.035 * k);
   }
+  if (st.helmet) {
+    ctx.fillStyle = st.helmet;
+    ctx.beginPath();
+    ctx.ellipse(X(0), Y(1.66), 0.16 * k, 0.17 * k, 0, Math.PI, 0);
+    ctx.fill();
+    ctx.fillRect(X(-0.16), Y(1.67), 0.32 * k, 0.05 * k);
+    if (!st.back) {
+      ctx.fillStyle = "rgba(20, 30, 50, 0.55)";
+      ctx.fillRect(X(-0.13), Y(1.63), 0.26 * k, 0.12 * k);
+    }
+  }
+  return { hands, k, X, Y };
 }
 
 function shadow(ctx: Ctx, v: View, x: number, z: number, w: number) {
@@ -326,31 +519,148 @@ function shadow(ctx: Ctx, v: View, x: number, z: number, w: number) {
   ctx.fill();
 }
 
+/** Indian tricolour on a pole, waving. (px, py) is the top of the pole. */
+function tricolour(ctx: Ctx, px: number, py: number, k: number, phase: number, dir: number) {
+  const w = 0.75 * k * dir;
+  const h = 0.5 * k;
+  const wave = (t: number) => Math.sin(phase + t * 3) * 0.06 * k * t;
+  const band = (top: number, color: string) => {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(px, py + top);
+    for (let t = 0; t <= 1.001; t += 0.25) ctx.lineTo(px + w * t, py + top + wave(t));
+    for (let t = 1; t >= -0.001; t -= 0.25) ctx.lineTo(px + w * t, py + top + h / 3 + wave(t));
+    ctx.closePath();
+    ctx.fill();
+  };
+  band(0, "#ff9933");
+  band(h / 3, "#ffffff");
+  band((2 * h) / 3, "#138808");
+  if (k > 18) {
+    ctx.strokeStyle = "#000080";
+    ctx.lineWidth = Math.max(1, 0.02 * k);
+    ctx.beginPath();
+    ctx.arc(px + w / 2, py + h / 2 + wave(0.5), h * 0.13, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
+
 function drawProtester(ctx: Ctx, v: View, pr: Protester, clock: number) {
   const p = project(v, pr.x, 0, pr.z);
   if (p.s * pr.height < 3) return;
-  const bob = Math.abs(Math.sin(clock * 4 + pr.phase)) * 0.12;
+  const bob = Math.abs(Math.sin(clock * 4 + pr.phase)) * 0.1;
   const gy = p.y - bob * p.s;
-  figure(ctx, p.x, gy, p.s, { shirt: pr.shirt, pants: "#2b2d42", skin: pr.skin, hair: "#222" }, {
+  const hasSign = pr.sign !== null;
+  const lod = p.s * (pr.height / 1.75);
+  if (lod < 8) {
+    // Far away the person is only a few pixels tall: a silhouette is enough.
+    ctx.fillStyle = pr.pants;
+    ctx.fillRect(p.x - 0.15 * lod, gy - 0.9 * lod, 0.3 * lod, 0.9 * lod);
+    ctx.fillStyle = pr.shirt;
+    ctx.fillRect(p.x - 0.23 * lod, gy - 1.48 * lod, 0.46 * lod, 0.62 * lod);
+    ctx.fillStyle = pr.skin;
+    ctx.fillRect(p.x - 0.1 * lod, gy - 1.75 * lod, 0.2 * lod, 0.24 * lod);
+    if (pr.sign) {
+      ctx.fillStyle = pr.signColors[0];
+      ctx.fillRect(p.x - 0.52 * lod, gy - 2.62 * lod, 1.05 * lod, 0.58 * lod);
+    } else if (pr.kind === "flag") {
+      const fx = p.x + 0.32 * lod;
+      const band = 0.17 * lod;
+      ctx.fillStyle = "#ff9933";
+      ctx.fillRect(fx, gy - 3.1 * lod, 0.75 * lod * -pr.side, band);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(fx, gy - 3.1 * lod + band, 0.75 * lod * -pr.side, band);
+      ctx.fillStyle = "#138808";
+      ctx.fillRect(fx, gy - 3.1 * lod + band * 2, 0.75 * lod * -pr.side, band);
+    }
+    return;
+  }
+  const style: FigureStyle = {
+    shirt: pr.shirt,
+    pants: pr.pants,
+    skin: pr.skin,
+    hair: pr.hair,
+    kurta: pr.kind === "woman" || pr.kind === "elder",
+    dupatta: pr.dupatta,
+    longHair: pr.kind === "woman",
+    topi: pr.kind === "elder",
+    backpack: pr.backpack ? "#3a3a3a" : undefined,
+    shoes: pr.kind === "student" ? "#e9e9e9" : "#3b2a20",
+  };
+  const fig = figure(ctx, p.x, gy, p.s, style, {
     phase: clock * 4 + pr.phase,
     height: pr.height,
-    armsUp: pr.sign !== null,
-    fist: pr.sign === null,
+    armsUp: hasSign,
+    flag: pr.kind === "flag",
+    fist: !hasSign && pr.kind !== "flag",
   });
+  const { k, X, Y } = fig;
+
+  if (pr.kind === "flag") {
+    const [hx, hy] = fig.hands[1];
+    ctx.strokeStyle = "#8b5a2b";
+    ctx.lineWidth = Math.max(1, 0.04 * k);
+    ctx.beginPath();
+    ctx.moveTo(X(hx), Y(hy - 0.3));
+    ctx.lineTo(X(hx), Y(hy + 1.2));
+    ctx.stroke();
+    tricolour(ctx, X(hx), Y(hy + 1.2), k, clock * 5 + pr.phase, -pr.side);
+    return;
+  }
   if (!pr.sign) return;
-  const k = p.s * (pr.height / 1.75);
   const sway = Math.sin(clock * 2 + pr.phase) * 0.06 * k;
-  const w = 1.0 * k;
-  const h = 0.5 * k;
-  const top = gy - 2.45 * k;
+  const w = 1.05 * k;
+  const h = 0.58 * k;
+  const top = gy - 2.62 * k;
+  const [board, ink] = pr.signColors;
   ctx.fillStyle = "#6b4f2a";
-  ctx.fillRect(p.x - 0.03 * k + sway, top + h, 0.06 * k, 0.3 * k);
-  ctx.fillStyle = pr.signColor;
-  ctx.fillRect(p.x - w / 2 + sway, top, w, h);
-  ctx.strokeStyle = "#222";
-  ctx.lineWidth = Math.max(1, 0.03 * k);
-  ctx.strokeRect(p.x - w / 2 + sway, top, w, h);
-  text(ctx, pr.sign, p.x + sway, top + h / 2, 0.17 * k, "#c1121f", w * 0.92);
+  ctx.fillRect(p.x - 0.03 * k + sway, top + h, 0.06 * k, 0.12 * k);
+  ctx.drawImage(boardLabel(pr.sign, board, ink, 168, 92), p.x - w / 2 + sway, top, w, h);
+}
+
+/** A cloth banner across the sidewalk, carried by two marchers. */
+function drawStreetBanner(ctx: Ctx, v: View, b: StreetBanner, clock: number) {
+  const xa = b.side * (ROAD_HALF + 1.0);
+  const xb = b.side * (ROAD_HALF + 5.2);
+  const pa = project(v, xa, 0, b.z);
+  const pb = project(v, xb, 0, b.z);
+  if (pa.s < 2) return;
+  const bob = Math.abs(Math.sin(clock * 3 + b.z)) * 0.06 * pa.s;
+  const holder: FigureStyle = { shirt: "#f1f1f1", pants: "#2b4c7e", skin: "#c68642", hair: "#111" };
+  figure(ctx, pa.x, pa.y - bob, pa.s, { ...holder, shirt: "#e9c46a" }, { phase: clock * 4 + b.z, carry: true });
+  figure(ctx, pb.x, pb.y - bob, pb.s, { ...holder, shirt: "#2a9d8f" }, { phase: clock * 4 + b.z + 1, carry: true });
+  const top = project(v, xa, 1.95, b.z).y - bob;
+  const bottom = project(v, xa, 1.05, b.z).y - bob;
+  const l = Math.min(pa.x, pb.x);
+  const r = Math.max(pa.x, pb.x);
+  // Poles.
+  ctx.fillStyle = "#6b4f2a";
+  ctx.fillRect(l - 0.03 * pa.s, top - 0.1 * pa.s, 0.06 * pa.s, bottom - top + 0.4 * pa.s);
+  ctx.fillRect(r - 0.03 * pa.s, top - 0.1 * pa.s, 0.06 * pa.s, bottom - top + 0.4 * pa.s);
+  // Cloth swaying slightly between the poles.
+  const sag = 0.05 * pa.s * (1 + Math.sin(clock * 2 + b.z));
+  ctx.drawImage(boardLabel(b.text, b.cloth, b.ink, 512, 110, b.ink), l, top + sag, r - l, bottom - top);
+}
+
+/** A leaked exam sheet tumbling through the air. */
+function drawPaper(ctx: Ctx, v: View, p: Paper, clock: number) {
+  const y = p.y + Math.sin(clock * 2 + p.z) * 0.3;
+  const pr = project(v, p.x, y, p.z);
+  const size = 0.32 * pr.s;
+  if (size < 2) return;
+  ctx.save();
+  ctx.translate(pr.x, pr.y);
+  ctx.rotate(clock * p.spin);
+  ctx.scale(1, 0.4 + Math.abs(Math.cos(clock * p.spin * 0.7)) * 0.6);
+  ctx.fillStyle = "#fbfbf6";
+  ctx.fillRect(-size / 2, -size * 0.65, size, size * 1.3);
+  if (size > 10) {
+    ctx.fillStyle = "#c1121f";
+    ctx.fillRect(-size * 0.4, -size * 0.55, size * 0.5, size * 0.1);
+    ctx.fillStyle = "#9a9a9a";
+    for (let i = 0; i < 4; i++) ctx.fillRect(-size * 0.4, -size * 0.3 + i * size * 0.2, size * 0.8, size * 0.05);
+  }
+  ctx.restore();
 }
 
 function drawLamp(ctx: Ctx, v: View, side: -1 | 1, z: number) {
@@ -405,6 +715,22 @@ function drawBarricade(ctx: Ctx, v: View, o: Obstacle, clock: number) {
     }
     ctx.restore();
   }
+  if (board) {
+    // Police plate bolted to the middle of the barricade.
+    const mid = (board.l + board.r) / 2;
+    const pw = 0.62 * board.s;
+    const ph = (board.b - board.t) * 0.8;
+    const plate = label("barricade-plate", 124, 80, (c, w, h) => {
+      c.fillStyle = "#ffffff";
+      c.fillRect(0, 0, w, h);
+      c.strokeStyle = "#1d3557";
+      c.lineWidth = 4;
+      c.strokeRect(0, 0, w, h);
+      text(c, "पुलिस", w / 2, h * 0.3, h * 0.36, "#1d3557", w * 0.9);
+      text(c, "POLICE", w / 2, h * 0.74, h * 0.3, "#c1121f", w * 0.9);
+    });
+    ctx.drawImage(plate, mid - pw / 2, board.t + (board.b - board.t) * 0.1, pw, ph);
+  }
   if (board && Math.sin(clock * 8 + o.z) > 0) {
     ctx.fillStyle = "#ffb703";
     ctx.beginPath();
@@ -421,13 +747,16 @@ function drawBanner(ctx: Ctx, v: View, o: Obstacle, clock: number) {
   }
   const r = box(ctx, v, x, w, clearance + 0.05, h - 0.2, o.z, o.z + 0.08, { front: "#ffd60a", side: "#c9a800", top: "#ffe55c" });
   if (r) {
-    ctx.fillStyle = "#111";
-    const band = (r.b - r.t) * 0.12;
-    ctx.fillRect(r.l, r.t, r.r - r.l, band);
-    ctx.fillRect(r.l, r.b - band, r.r - r.l, band);
-    const cyc = (r.t + r.b) / 2;
-    text(ctx, "POLICE LINE", (r.l + r.r) / 2, cyc - 0.17 * r.s, 0.3 * r.s, "#111", (r.r - r.l) * 0.9);
-    text(ctx, "DO NOT CROSS", (r.l + r.r) / 2, cyc + 0.2 * r.s, 0.2 * r.s, "#111", (r.r - r.l) * 0.9);
+    const img = label("police-line", 460, 200, (c, w, h) => {
+      c.fillStyle = "#ffd60a";
+      c.fillRect(0, 0, w, h);
+      c.fillStyle = "#111";
+      c.fillRect(0, 0, w, h * 0.12);
+      c.fillRect(0, h * 0.88, w, h * 0.12);
+      text(c, "POLICE LINE", w / 2, h * 0.38, h * 0.3, "#111", w * 0.9);
+      text(c, "DO NOT CROSS", w / 2, h * 0.68, h * 0.2, "#111", w * 0.9);
+    });
+    ctx.drawImage(img, r.l, r.t, r.r - r.l, r.b - r.t);
   }
   const lamp = project(v, x, h + 0.1, o.z);
   if (lamp.s > 1) {
@@ -444,24 +773,47 @@ function drawOfficer(ctx: Ctx, v: View, x: number, z: number, clock: number, bac
   shadow(ctx, v, x, z, 0.45);
   const phase = running ? clock * 14 : 0;
   const bob = running ? Math.abs(Math.sin(phase)) * 0.06 * p.s : 0;
-  figure(ctx, p.x, p.y - bob, p.s, { shirt: "#1d3557", pants: "#14213d", skin: "#c68642", hair: "#111", cap: "#0b1730", back }, { phase });
-  // Lathi (baton) raised over the shoulder.
-  ctx.strokeStyle = "#8b5a2b";
+  // Khaki uniform. Officers chasing you wear caps; the ones blocking the road are in riot gear.
+  const fig = figure(
+    ctx,
+    p.x,
+    p.y - bob,
+    p.s,
+    {
+      shirt: "#b59a6a",
+      pants: "#a08657",
+      skin: "#a5694f",
+      hair: "#111",
+      shoes: "#1a1a1a",
+      belt: "#4a2f1a",
+      back,
+      cap: back ? "#8a6d3b" : undefined,
+      helmet: back ? undefined : "#2b3a55",
+    },
+    { phase },
+  );
+  // Lathi (bamboo baton) raised over the shoulder.
+  const [hx, hy] = fig.hands[1];
+  ctx.strokeStyle = "#c9a25e";
   ctx.lineWidth = Math.max(1, 0.06 * p.s);
   ctx.beginPath();
-  ctx.moveTo(p.x + 0.3 * p.s, p.y - bob - 1.0 * p.s);
-  ctx.lineTo(p.x + (0.55 + Math.sin(clock * 6) * 0.08) * p.s, p.y - bob - 2.0 * p.s);
+  ctx.moveTo(fig.X(hx), fig.Y(hy));
+  ctx.lineTo(fig.X(hx + 0.25 + Math.sin(clock * 6) * 0.08), fig.Y(hy + 1.0));
   ctx.stroke();
   if (back) return;
   // Riot shield.
-  ctx.fillStyle = "rgba(190, 220, 255, 0.45)";
+  ctx.fillStyle = "rgba(190, 220, 255, 0.42)";
   ctx.strokeStyle = "rgba(230, 240, 255, 0.9)";
   ctx.lineWidth = Math.max(1, 0.03 * p.s);
   ctx.beginPath();
-  ctx.roundRect(p.x - 0.42 * p.s, p.y - 1.5 * p.s, 0.66 * p.s, 1.1 * p.s, 0.06 * p.s);
+  ctx.roundRect(p.x - 0.45 * p.s, p.y - 1.55 * p.s, 0.7 * p.s, 1.15 * p.s, 0.06 * p.s);
   ctx.fill();
   ctx.stroke();
-  text(ctx, "POLICE", p.x - 0.09 * p.s, p.y - 1.25 * p.s, 0.13 * p.s, "#0b1730");
+  const lettering = label("shield", 140, 100, (c, w, h) => {
+    text(c, "पुलिस", w / 2, h * 0.3, h * 0.36, "#0b1730", w * 0.95);
+    text(c, "POLICE", w / 2, h * 0.75, h * 0.3, "#0b1730", w * 0.95);
+  });
+  ctx.drawImage(lettering, p.x - 0.42 * p.s, p.y - 1.45 * p.s, 0.64 * p.s, 0.46 * p.s);
 }
 
 function drawBus(ctx: Ctx, v: View, o: Obstacle, clock: number) {
@@ -514,7 +866,8 @@ function drawBus(ctx: Ctx, v: View, o: Obstacle, clock: number) {
   // White stripe and lettering.
   ctx.fillStyle = "#e9ecef";
   ctx.fillRect(r.l, r.t + 1.85 * s, r.r - r.l, 0.2 * s);
-  text(ctx, "POLICE", mid, r.t + 0.22 * s, 0.32 * s, "#fff", (r.r - r.l) * 0.9);
+  const busText = label("bus", 320, 60, (c, w, h) => text(c, "पुलिस  POLICE", w / 2, h / 2, h * 0.7, "#fff", w * 0.95));
+  ctx.drawImage(busText, r.l + (r.r - r.l) * 0.05, r.t + 0.06 * s, (r.r - r.l) * 0.9, 0.34 * s);
   // Headlights, brighter when the bus is driving at you.
   ctx.fillStyle = o.vz > 0 ? "#fff6b0" : "#bfb68a";
   for (const hx of [r.l + 0.35 * s, r.r - 0.35 * s]) {
@@ -540,6 +893,7 @@ function drawPickup(ctx: Ctx, v: View, c: Pickup, clock: number) {
   const p = project(v, c.lane * LANE_W, c.y + Math.sin(clock * 4 + c.z) * 0.08, c.z);
   if (p.s < 1) return;
   if (c.kind === "coin") {
+    // Spinning gold coin.
     const spin = Math.abs(Math.cos(clock * 5 + c.z * 0.3));
     ctx.fillStyle = "#e09f1f";
     ctx.beginPath();
@@ -576,6 +930,7 @@ const PLAYER_STYLE: FigureStyle = {
   skin: "#e0ac69",
   hair: "#1a1a1a",
   back: true,
+  shoes: "#f5f5f5",
   backpack: "#2a9d8f",
 };
 
@@ -628,6 +983,12 @@ export function render(ctx: Ctx, v: View, game: Game, clock: number) {
   const sprites: { z: number; draw: () => void }[] = [];
   for (const pr of game.protesters) {
     if (pr.z > NEAR_Z && pr.z < VIEW_DIST * 0.8) sprites.push({ z: pr.z, draw: () => drawProtester(ctx, v, pr, clock) });
+  }
+  for (const b of game.banners) {
+    if (b.z > NEAR_Z + 1 && b.z < VIEW_DIST * 0.7) sprites.push({ z: b.z, draw: () => drawStreetBanner(ctx, v, b, clock) });
+  }
+  for (const p of game.papers) {
+    if (p.z > 4 && p.z < 60) sprites.push({ z: p.z, draw: () => drawPaper(ctx, v, p, clock) });
   }
   const lampStart = Math.ceil((game.distance + NEAR_Z) / 30);
   for (let k = lampStart; k * 30 - game.distance < VIEW_DIST; k++) {

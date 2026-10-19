@@ -90,11 +90,13 @@ button:focus-visible {
   color: #ffd447;
 }
 
-.coin-dot {
+.coin-icon {
+  display: inline-block;
   width: 16px;
   height: 16px;
   border-radius: 50%;
   background: radial-gradient(circle at 40% 35%, #fff2a8, #ffd447 40%, #e09f1f);
+  vertical-align: middle;
 }
 
 .hud-right {
@@ -160,46 +162,75 @@ button:focus-visible {
 /* ---- touch controls (only on touch screens) ----------------------------- */
 
 .touch-controls {
+  --pad: clamp(58px, 16vmin, 74px);
   position: absolute;
-  left: calc(var(--safe-left) + 14px);
-  right: calc(var(--safe-right) + 14px);
-  bottom: calc(var(--safe-bottom) + 16px);
+  right: calc(var(--safe-right) + 12px);
+  bottom: calc(var(--safe-bottom) + 14px);
   display: none;
-  justify-content: space-between;
-  align-items: flex-end;
+  grid-template-columns: repeat(3, var(--pad));
+  grid-template-rows: repeat(3, var(--pad));
+  grid-template-areas:
+    ". up ."
+    "left . right"
+    ". down .";
+  gap: 6px;
   pointer-events: none;
 }
 
 @media (pointer: coarse) {
   .touch-controls {
-    display: flex;
+    display: grid;
   }
 }
 
-.pad {
-  display: flex;
-  gap: 12px;
+.pad-up {
+  grid-area: up;
 }
 
-.pad-vertical {
-  flex-direction: column;
+.pad-left {
+  grid-area: left;
+}
+
+.pad-right {
+  grid-area: right;
+}
+
+.pad-down {
+  grid-area: down;
 }
 
 .pad-btn {
   pointer-events: auto;
   touch-action: none;
-  width: clamp(58px, 17vmin, 78px);
-  height: clamp(58px, 17vmin, 78px);
+  width: var(--pad);
+  height: var(--pad);
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.45);
-  background: rgba(10, 6, 20, 0.45);
-  font-size: clamp(20px, 6vmin, 28px);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  background: rgba(10, 6, 20, 0.5);
   backdrop-filter: blur(4px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  font-size: calc(var(--pad) * 0.3);
+  line-height: 1;
+}
+
+.pad-label {
+  font-size: calc(var(--pad) * 0.16);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  color: var(--accent);
 }
 
 .pad-btn:active {
   background: rgba(255, 204, 0, 0.55);
   transform: scale(0.94);
+}
+
+.pad-btn:active .pad-label {
+  color: #1a1033;
 }
 
 /* ---- overlays ----------------------------------------------------------- */
@@ -468,5 +499,77 @@ kbd {
   .new-best,
   .chase-banner {
     animation: none;
+  }
+}
+
+/* ---- news ticker (home screen) ------------------------------------------ */
+
+.ticker {
+  position: absolute;
+  top: var(--safe-top);
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: stretch;
+  height: 34px;
+  background: rgba(10, 6, 20, 0.85);
+  border-bottom: 2px solid #c1121f;
+  font-size: 14px;
+  font-weight: 700;
+  overflow: hidden;
+}
+
+.ticker-tag {
+  display: grid;
+  place-items: center;
+  padding: 0 12px;
+  background: #c1121f;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  flex-shrink: 0;
+}
+
+.ticker-window {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+}
+
+.ticker-track {
+  display: flex;
+  white-space: nowrap;
+  animation: ticker 40s linear infinite;
+}
+
+.ticker-item {
+  padding: 0 24px;
+}
+
+.ticker-item::after {
+  content: "•";
+  margin-left: 24px;
+  color: var(--accent);
+}
+
+@keyframes ticker {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.home {
+  padding-top: calc(var(--safe-top) + 50px);
+}
+
+.coin-note {
+  margin: 0;
+  font-size: 14px;
+  color: #ffd447;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track {
+    animation-duration: 120s;
   }
 }
