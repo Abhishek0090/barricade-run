@@ -1,18 +1,20 @@
 import type { MetadataRoute } from "next";
 
+import { ARCADE_NAME } from "@/games/shared/constants";
+
 export const dynamic = "force-static";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Barricade Run",
-    short_name: "Barricade Run",
-    description: "Protest runner: dodge police barricades, riot police and the detention bus, and grab the coins.",
+    name: ARCADE_NAME,
+    short_name: "Barricade",
+    description: "Protest arcade by Abhishek Pal: Barricade Run, Barricade Drive and Rail Roko.",
     start_url: "/",
     scope: "/",
     display: "fullscreen",
     orientation: "any",
-    background_color: "#1a1033",
-    theme_color: "#1a1033",
+    background_color: "#140c29",
+    theme_color: "#140c29",
     categories: ["games"],
     icons: [
       { src: "/icon-192.png", sizes: "192x192", type: "image/png" },

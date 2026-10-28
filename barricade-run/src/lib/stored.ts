@@ -36,5 +36,8 @@ export function storedNumber(key: string, fallback = 0) {
   return { get, set, useValue };
 }
 
+/** Barricade Run keeps its original key so best scores from older versions survive. */
 export const bestScore = storedNumber("barricade-run:best");
+export const driveBest = storedNumber("barricade-run:drive-best");
+export const railBest = storedNumber("barricade-run:rail-best");
 export const mutedPref = storedNumber("barricade-run:muted");

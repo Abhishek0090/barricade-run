@@ -1,29 +1,29 @@
+import { CHASE_TIME, FREE_LIFELINES, INVULN_TIME, MAX_LIFELINES, START_CHASE_TIME } from "../shared/constants";
+import { Crowd } from "../shared/crowd";
+import { BARRICADE, OFFICER, POLICE_BUS, POLICE_LINE } from "../shared/props";
+import { pick, rand, shuffle, weighted } from "../shared/random";
+import type { Action, ArcadeEvents, ArcadeGame } from "../shared/types";
+
 import {
-  CHASE_TIME,
   CROUCH_H,
   CROUCH_TIME,
   FAST_FALL_V,
-  FREE_LIFELINES,
   GRAVITY,
-  INVULN_TIME,
   JUMP_V,
+  type Lane,
   LANE_SWITCH_RATE,
   LANE_W,
-  type Lane,
-  MAX_LIFELINES,
   MAX_SPEED,
-  BANNERS,
-  OBSTACLE,
-  PLACARDS,
   PLAYER_H,
   PLAYER_HALF_D,
   PLAYER_HALF_W,
   ROAD_HALF,
   SPEED_GAIN,
-  START_CHASE_TIME,
   START_SPEED,
   VIEW_DIST,
 } from "./constants";
+
+export const OBSTACLE = { barricade: BARRICADE, banner: POLICE_LINE, police: OFFICER, bus: POLICE_BUS } as const;
 
 export type ObstacleKind = keyof typeof OBSTACLE;
 export type CrashReason = ObstacleKind | "caught";
@@ -46,44 +46,6 @@ export interface Pickup {
   taken: boolean;
 }
 
-export type ProtesterKind = "student" | "woman" | "elder" | "flag";
-
-export interface Protester {
-  kind: ProtesterKind;
-  side: -1 | 1;
-  x: number;
-  z: number;
-  shirt: string;
-  pants: string;
-  skin: string;
-  hair: string;
-  dupatta: string | null;
-  backpack: boolean;
-  sign: string | null;
-  /** [board, ink] */
-  signColors: [string, string];
-  phase: number;
-  height: number;
-}
-
-/** A cloth banner carried across the sidewalk by two marchers. */
-export interface StreetBanner {
-  side: -1 | 1;
-  z: number;
-  text: string;
-  cloth: string;
-  ink: string;
-}
-
-/** A leaked exam sheet blowing across the road (decoration). */
-export interface Paper {
-  x: number;
-  y: number;
-  z: number;
-  spin: number;
-  drift: number;
-}
-
 export interface Player {
   lane: Lane;
   prevLane: Lane;
@@ -95,67 +57,9 @@ export interface Player {
   runPhase: number;
 }
 
-export interface GameEvents {
-  onCoin?: () => void;
-  onJump?: () => void;
-  onCrouch?: () => void;
-  onLane?: () => void;
-  onStumble?: () => void;
-  onLifelinePickup?: () => void;
-  onCrash?: (reason: CrashReason) => void;
-}
-
-export type RunStatus = "running" | "crashed";
-
-const TEES = ["#e63946", "#2a9d8f", "#e9c46a", "#3a86ff", "#f1f1f1", "#264653", "#6c757d", "#ff006e", "#111111"];
-const KURTAS = ["#d62828", "#f77f00", "#fcbf49", "#e63995", "#7b2cbf", "#2a9d8f", "#06d6a0", "#ffafcc", "#0077b6"];
-const DUPATTAS = ["#ffd60a", "#ff70a6", "#ffffff", "#80ed99", "#ff9f1c"];
-const PANTS = ["#2b4c7e", "#1d3557", "#3d405b", "#2b2d42", "#5c4d3c"];
-const SKINS = ["#f1c27d", "#e0ac69", "#c68642", "#a5694f", "#8d5524"];
-const HAIR = ["#111111", "#1f140f", "#2b1d14", "#3b2a20"];
-const SIGN_COLORS: [string, string][] = [
-  ["#ffffff", "#c1121f"],
-  ["#ffe066", "#111111"],
-  ["#111111", "#ffd60a"],
-  ["#fffbe6", "#1d3557"],
-  ["#ff006e", "#ffffff"],
-  ["#f1f1f1", "#111111"],
-];
-const CLOTHS: [string, string][] = [
-  ["#ffffff", "#c1121f"],
-  ["#c1121f", "#ffffff"],
-  ["#111111", "#ffd60a"],
-  ["#ffd60a", "#111111"],
-  ["#1d3557", "#ffffff"],
-];
-const PROTESTER_SPAN = 150;
-const BANNER_GAP = 24;
-const PAPER_SPAN = 110;
-
-const rand = (min = 0, max = 1) => min + Math.random() * (max - min);
-const pick = <T>(items: readonly T[]): T => items[Math.floor(Math.random() * items.length)];
-
-function shuffle<T>(items: T[]): T[] {
-  for (let i = items.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [items[i], items[j]] = [items[j], items[i]];
-  }
-  return items;
-}
-
-function weighted<T extends string>(weights: Record<T, number>): T {
-  const entries = Object.entries(weights) as [T, number][];
-  let roll = Math.random() * entries.reduce((sum, [, w]) => sum + w, 0);
-  for (const [key, w] of entries) {
-    roll -= w;
-    if (roll <= 0) return key;
-  }
-  return entries[0][0];
-}
-
-/** All game rules: movement, spawning, collisions, chase and lifelines. Rendering lives in render.ts. */
-export class Game {
-  status: RunStatus = "running";
+/** Barricade Run rules: movement, spawning, collisions, chase and lifelines. Rendering lives in render.ts. */
+export class RunnerGame implements ArcadeGame {
+  status: "running" | "crashed" = "running";
   time = 0;
   distance = 0;
   speed = START_SPEED;
@@ -170,29 +74,18 @@ export class Game {
   player: Player = { lane: 0, prevLane: 0, x: 0, y: 0, vy: 0, crouchT: 0, invulnT: 0, runPhase: 0 };
   obstacles: Obstacle[] = [];
   pickups: Pickup[] = [];
-  protesters: Protester[] = [];
-  banners: StreetBanner[] = [];
-  papers: Paper[] = [];
+  crowd = new Crowd({ edge: ROAD_HALF, depth: 6, floor: 0.15 });
 
   private nextRowZ = 45;
 
   /**
-   * @param ghost Attract mode for the home screen: no collisions, simple autopilot dodging.
+   * @param ghost Attract mode for previews: no collisions, simple autopilot dodging.
    */
   constructor(
-    private events: GameEvents = {},
+    private events: ArcadeEvents = {},
     readonly ghost = false,
   ) {
     if (ghost) this.chaseT = 0;
-    for (const side of [-1, 1] as const) {
-      for (let z = -4; z < PROTESTER_SPAN - 4; z += rand(0.9, 2.0)) {
-        this.protesters.push(this.makeProtester(side, z));
-      }
-    }
-    for (let i = 0; i * BANNER_GAP < PROTESTER_SPAN; i++) {
-      this.banners.push(this.makeBanner(i % 2 ? 1 : -1, 12 + i * BANNER_GAP));
-    }
-    for (let i = 0; i < 18; i++) this.papers.push(this.makePaper(rand(-4, PAPER_SPAN)));
   }
 
   get score() {
@@ -213,6 +106,13 @@ export class Game {
 
   // ---- input -------------------------------------------------------------
 
+  input(action: Action) {
+    if (action === "left") this.move(-1);
+    else if (action === "right") this.move(1);
+    else if (action === "up") this.jump();
+    else this.crouch();
+  }
+
   move(dir: -1 | 1) {
     if (this.status !== "running") return;
     const p = this.player;
@@ -220,14 +120,14 @@ export class Game {
     if (target === p.lane) return;
     p.prevLane = p.lane;
     p.lane = target;
-    this.events.onLane?.();
+    this.events.onSound?.("lane");
   }
 
   jump() {
     if (this.status !== "running" || !this.grounded) return;
     this.player.crouchT = 0;
     this.player.vy = JUMP_V;
-    this.events.onJump?.();
+    this.events.onSound?.("jump");
   }
 
   crouch() {
@@ -235,7 +135,7 @@ export class Game {
     const p = this.player;
     if (!this.grounded) p.vy = Math.min(p.vy, FAST_FALL_V);
     p.crouchT = CROUCH_TIME;
-    this.events.onCrouch?.();
+    this.events.onSound?.("crouch");
   }
 
   /** Spend a lifeline after a crash. Clears the road ahead and gives a few seconds of protection. */
@@ -277,20 +177,7 @@ export class Game {
 
     for (const o of this.obstacles) o.z -= dz + o.vz * dt;
     for (const c of this.pickups) c.z -= dz;
-    for (const pr of this.protesters) {
-      pr.z -= dz;
-      if (pr.z < -6) Object.assign(pr, this.makeProtester(pr.side, pr.z + PROTESTER_SPAN));
-    }
-    const bannerSpan = this.banners.length * BANNER_GAP;
-    for (const b of this.banners) {
-      b.z -= dz;
-      if (b.z < -6) Object.assign(b, this.makeBanner(b.side, b.z + bannerSpan));
-    }
-    for (const p of this.papers) {
-      p.z -= dz * 0.85;
-      p.x += p.drift * dt;
-      if (p.z < -5 || Math.abs(p.x) > ROAD_HALF + 3) Object.assign(p, this.makePaper(p.z < -5 ? p.z + PAPER_SPAN : p.z));
-    }
+    this.crowd.update(dz, dt);
     this.obstacles = this.obstacles.filter((o) => o.z + o.len > -8);
     this.pickups = this.pickups.filter((c) => c.z > -8 && !c.taken);
 
@@ -348,10 +235,10 @@ export class Game {
       c.taken = true;
       if (c.kind === "coin") {
         this.coins++;
-        this.events.onCoin?.();
+        this.events.onSound?.("coin");
       } else {
         this.lifelines = Math.min(MAX_LIFELINES, this.lifelines + 1);
-        this.events.onLifelinePickup?.();
+        this.events.onSound?.("lifeline");
       }
     }
 
@@ -390,12 +277,13 @@ export class Game {
       return;
     }
     this.chaseT = CHASE_TIME;
-    this.events.onStumble?.();
+    this.events.onSound?.("stumble");
   }
 
   private crash(reason: CrashReason) {
     this.status = "crashed";
     this.crashReason = reason;
+    this.events.onSound?.("crash");
     this.events.onCrash?.(reason);
   }
 
@@ -448,35 +336,5 @@ export class Game {
     for (let i = -2; i <= 2; i++) {
       this.pickups.push({ kind: "coin", lane, z: z + i * 1.8, y: 1.9 - 0.18 * i * i, taken: false });
     }
-  }
-
-  private makeProtester(side: -1 | 1, z: number): Protester {
-    const kind = weighted<ProtesterKind>({ student: 4, woman: 3, elder: 1.5, flag: 1 });
-    const woman = kind === "woman";
-    return {
-      kind,
-      side,
-      x: side * (ROAD_HALF + rand(1.3, 6)),
-      z,
-      shirt: kind === "elder" ? "#f1efe6" : woman ? pick(KURTAS) : pick(TEES),
-      pants: kind === "elder" ? "#e9e5d6" : woman ? pick(KURTAS) : pick(PANTS),
-      skin: pick(SKINS),
-      hair: kind === "elder" ? pick(["#d9d9d9", "#9a9a9a"]) : pick(HAIR),
-      dupatta: woman && Math.random() < 0.7 ? pick(DUPATTAS) : null,
-      backpack: kind === "student" && Math.random() < 0.6,
-      sign: kind !== "flag" && Math.random() < 0.55 ? pick(PLACARDS) : null,
-      signColors: pick(SIGN_COLORS),
-      phase: rand(0, Math.PI * 2),
-      height: woman ? rand(1.5, 1.68) : rand(1.6, 1.85),
-    };
-  }
-
-  private makeBanner(side: -1 | 1, z: number): StreetBanner {
-    const [cloth, ink] = pick(CLOTHS);
-    return { side, z, text: pick(BANNERS), cloth, ink };
-  }
-
-  private makePaper(z: number): Paper {
-    return { x: rand(-ROAD_HALF - 2, ROAD_HALF + 2), y: rand(0.3, 3), z, spin: rand(-4, 4), drift: rand(-1.2, 1.2) };
   }
 }

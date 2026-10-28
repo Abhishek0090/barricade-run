@@ -1,18 +1,22 @@
 import type { Metadata, Viewport } from "next";
 
 import { ServiceWorker } from "@/components/pwa";
+import { ARCADE_NAME, AUTHOR } from "@/games/shared/constants";
 
 import "./globals.css";
 
-const description = "Run with the street protest against the NEET paper leak, vote chori and corruption. Dodge police barricades, riot police and the detention bus. Plays on laptop and mobile, works offline.";
+const description =
+  "Three street games set in the protest against the NEET paper leak, vote chori and corruption: Barricade Run, Barricade Drive and Rail Roko. Plays on laptop and mobile, works offline.";
 
 export const metadata: Metadata = {
-  title: "Barricade Run",
+  title: { default: ARCADE_NAME, template: `%s • ${ARCADE_NAME}` },
   description,
-  applicationName: "Barricade Run",
+  applicationName: ARCADE_NAME,
+  authors: [{ name: AUTHOR }],
+  creator: AUTHOR,
   appleWebApp: {
     capable: true,
-    title: "Barricade Run",
+    title: ARCADE_NAME,
     statusBarStyle: "black-translucent",
   },
   formatDetection: { telephone: false },
@@ -24,7 +28,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  themeColor: "#1a1033",
+  themeColor: "#140c29",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

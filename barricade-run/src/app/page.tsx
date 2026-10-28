@@ -1,5 +1,5 @@
-import { BarricadeRun } from "@/components/barricade-run";
+import { Hub } from "@/components/hub";
 
 export default function Home() {
-  return <BarricadeRun />;
+  return <Hub />;
 }

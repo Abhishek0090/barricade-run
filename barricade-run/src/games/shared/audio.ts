@@ -1,3 +1,5 @@
+import type { Sound } from "./types";
+
 /** Tiny Web Audio synth for game sounds. No audio files to download or cache. */
 export class Sfx {
   private ctx: AudioContext | null = null;
@@ -25,9 +27,9 @@ export class Sfx {
     if (this.master && this.ctx) this.master.gain.setTargetAtTime(muted ? 0 : 0.5, this.ctx.currentTime, 0.02);
   }
 
-  private tone(type: OscillatorType, from: number, to: number, duration: number, volume = 0.3) {
+  private tone(type: OscillatorType, from: number, to: number, duration: number, volume = 0.3, delay = 0) {
     if (!this.ctx || !this.master || this.muted) return;
-    const t = this.ctx.currentTime;
+    const t = this.ctx.currentTime + delay;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = type;
@@ -40,7 +42,7 @@ export class Sfx {
     osc.stop(t + duration + 0.02);
   }
 
-  private noise(duration: number, volume = 0.4) {
+  private noise(duration: number, volume = 0.4, filter?: number) {
     if (!this.ctx || !this.master || this.muted) return;
     const t = this.ctx.currentTime;
     const buffer = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * duration), this.ctx.sampleRate);
@@ -50,26 +52,60 @@ export class Sfx {
     const gain = this.ctx.createGain();
     gain.gain.value = volume;
     src.buffer = buffer;
-    src.connect(gain).connect(this.master);
+    if (filter) {
+      const bq = this.ctx.createBiquadFilter();
+      bq.type = "bandpass";
+      bq.frequency.setValueAtTime(filter, t);
+      bq.frequency.exponentialRampToValueAtTime(filter * 4, t + duration);
+      src.connect(bq).connect(gain).connect(this.master);
+    } else {
+      src.connect(gain).connect(this.master);
+    }
     src.start(t);
   }
 
-  coin = () => this.tone("square", 988, 1976, 0.09, 0.12);
-  jump = () => this.tone("triangle", 300, 700, 0.18, 0.25);
-  crouch = () => this.tone("sawtooth", 400, 150, 0.15, 0.12);
-  lane = () => this.tone("sine", 500, 650, 0.06, 0.12);
-  stumble = () => {
-    this.noise(0.15, 0.3);
-    this.tone("square", 220, 110, 0.2, 0.2);
+  private sounds: Record<Sound, () => void> = {
+    coin: () => this.tone("square", 988, 1976, 0.09, 0.12),
+    jump: () => this.tone("triangle", 300, 700, 0.18, 0.25),
+    crouch: () => this.tone("sawtooth", 400, 150, 0.15, 0.12),
+    lane: () => this.tone("sine", 500, 650, 0.06, 0.12),
+    stumble: () => {
+      this.noise(0.15, 0.3);
+      this.tone("square", 220, 110, 0.2, 0.2);
+    },
+    crash: () => {
+      this.noise(0.5, 0.5);
+      this.tone("sawtooth", 200, 40, 0.6, 0.3);
+    },
+    lifeline: () => {
+      this.tone("triangle", 523, 1046, 0.25, 0.25);
+      this.tone("triangle", 784, 1568, 0.3, 0.2, 0.12);
+    },
+    nitro: () => {
+      this.noise(0.7, 0.35, 300);
+      this.tone("sawtooth", 120, 520, 0.6, 0.12);
+    },
+    smash: () => {
+      this.noise(0.25, 0.45, 900);
+      this.tone("square", 600, 200, 0.18, 0.12);
+    },
+    brake: () => this.noise(0.3, 0.18, 2400),
+    clank: () => {
+      this.tone("square", 180, 160, 0.08, 0.18);
+      this.tone("square", 140, 120, 0.08, 0.14, 0.07);
+    },
+    bell: () => {
+      this.tone("sine", 1568, 1560, 0.5, 0.18);
+      this.tone("sine", 2093, 2080, 0.4, 0.1, 0.02);
+      this.tone("sine", 1568, 1560, 0.4, 0.14, 0.18);
+    },
+    horn: () => {
+      this.tone("sawtooth", 415, 410, 0.35, 0.09);
+      this.tone("sawtooth", 523, 518, 0.35, 0.07);
+    },
   };
-  crash = () => {
-    this.noise(0.5, 0.5);
-    this.tone("sawtooth", 200, 40, 0.6, 0.3);
-  };
-  lifeline = () => {
-    this.tone("triangle", 523, 1046, 0.25, 0.25);
-    setTimeout(() => this.tone("triangle", 784, 1568, 0.3, 0.2), 120);
-  };
+
+  play = (sound: Sound) => this.sounds[sound]();
 
   /** Two-tone police siren while the chase is on. Safe to call every frame. */
   setSiren(on: boolean) {

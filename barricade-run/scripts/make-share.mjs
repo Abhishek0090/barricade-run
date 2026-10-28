@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Barricade Arcade by Abhishek Pal.
 // Builds barricade-run-share/setup-barricade-run.mjs: one self-contained script that creates
 // or updates the whole project on another machine (code, config, package-lock.json).
 // Run: npm run share
@@ -13,7 +14,14 @@ const SKIP_DIRS = new Set(["node_modules", ".next", "out", ".git", "barricade-ru
 const SKIP_FILES = [/\.tsbuildinfo$/, /^next-env\.d\.ts$/, /^\.env(?!\.example)/, /\.log$/];
 const BINARY = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".woff", ".woff2"]);
 /** Files from older versions to delete when updating. Add paths here when you remove or rename a file. */
-const OBSOLETE = [];
+const OBSOLETE = [
+  // v2 (Barricade Arcade): the single game moved to src/games/runner and the shared code to src/games/shared.
+  "src/game/engine.ts",
+  "src/game/render.ts",
+  "src/game/audio.ts",
+  "src/game/constants.ts",
+  "src/components/barricade-run.tsx",
+];
 /** Drawn by scripts/generate-icons.mjs on the target machine instead of being embedded (keeps the script small). */
 const GENERATED = [
   "public/icon-192.png",
@@ -112,7 +120,7 @@ function run(req, opts, scriptPath) {
     console.error("A different project already exists in " + target + ". Run this somewhere else.");
     process.exit(1);
   }
-  console.log("Barricade Run - " + (MODE === "sync" ? "FULL SYNC" : fresh ? "creating project" : "updating project"));
+  console.log("Barricade Arcade (by Abhishek Pal) - " + (MODE === "sync" ? "FULL SYNC" : fresh ? "creating project" : "updating project"));
   console.log("Folder: " + target + "\n");
   const hashOf = (p) => (existsSync(join(target, p)) ? sha(readFileSync(join(target, p))) : "none");
   const depsBefore = hashOf("package.json") + hashOf("package-lock.json");
@@ -191,14 +199,14 @@ function run(req, opts, scriptPath) {
 
 const HEADERS = {
   setup: [
-    `// Barricade Run - setup / update script (${files.length} files + ${GENERATED.length} generated icons, built ${built} UTC).`,
+    `// Barricade Arcade by Abhishek Pal - setup / update script (${files.length} files + ${GENERATED.length} generated icons, built ${built} UTC).`,
     "// New machine:  put this file in any folder and run  node setup-barricade-run.mjs",
     '//               it creates a "barricade-run" folder there.',
     "// Update:       run it inside the existing barricade-run folder (the one with package.json).",
     "// Then:         npm install   and   npm run dev",
   ],
   sync: [
-    `// Barricade Run - FULL SYNC (${files.length} files + ${GENERATED.length} generated icons, built ${built} UTC).`,
+    `// Barricade Arcade by Abhishek Pal - FULL SYNC (${files.length} files + ${GENERATED.length} generated icons, built ${built} UTC).`,
     "// Makes an existing project identical to this version, whatever version it had before.",
     "// Run inside the project folder (the one with package.json):  node sync-barricade-run.mjs",
     "// Files that are no longer part of the project are moved to .sync-backup/ (never deleted).",
@@ -232,7 +240,9 @@ const sizeKb = Math.round(statSync(outFile).size / 1024);
 
 writeFileSync(
   join(OUT_DIR, "HOW-TO-SETUP.md"),
-  `# Barricade Run - set up or update on another laptop
+  `# Barricade Arcade - set up or update on another laptop
+
+By Abhishek Pal. Three games: Barricade Run (\`/run/\`), Barricade Drive (\`/drive/\`) and Rail Roko (\`/rail/\`).
 
 Built ${built} UTC. Both scripts contain the whole project compressed, including \`package-lock.json\`,
 check every file after writing, and redraw the app icons locally.
@@ -255,7 +265,7 @@ check every file after writing, and redraw the app icons locally.
    npm run dev
    \`\`\`
 
-4. Open http://localhost:3000
+4. Open http://localhost:3000 and pick a game
 
 ## Update an existing copy (sync)
 
@@ -300,6 +310,10 @@ or on iPhone use Share, then "Add to Home Screen".
 
 - Not included: \`node_modules\`, \`.next\`, \`out\` (rebuilt by npm) and the PNG icons (redrawn by the script).
 - Rebuild this script after changes with \`npm run share\`.
+- Updating from the single-game version: the old \`src/game/\` files and \`src/components/barricade-run.tsx\`
+  are moved to \`.sync-backup/\`. Best scores and the sound setting are kept.
+- If the games show no thumbnails and Play does nothing under \`npm run dev\`, the Console Ninja VS Code
+  extension has patched Next.js. Disable it for this workspace, then run \`npm install next --force\`.
 `,
 );
 console.log(`Wrote setup-barricade-run.mjs and sync-barricade-run.mjs (${files.length} files, ${sizeKb} KB each) and HOW-TO-SETUP.md in ${relative(ROOT, OUT_DIR)}`);

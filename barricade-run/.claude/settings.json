@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find src *)",
+      "Bash(cat package.json README.md next.config.ts .gitignore src/app/manifest.ts src/lib/stored.ts src/game/constants.ts src/game/audio.ts public/sw.js)",
+      "Bash(ls src/app src/components)",
+      "Bash(ls)"
+    ]
+  }
+}
