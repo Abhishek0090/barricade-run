@@ -6,7 +6,7 @@ import { type PointerEvent, useCallback, useEffect, useRef, useState } from "rea
 import { Sfx } from "@/games/shared/audio";
 import { AUTHOR, LIFELINE_DECISION_TIME, MAX_LIFELINES } from "@/games/shared/constants";
 import type { View } from "@/games/shared/scene";
-import type { Action, ArcadeGame, GameDef, Meter } from "@/games/shared/types";
+import type { Action, ArcadeGame, GameDef, Meter, Scene3D, Speech } from "@/games/shared/types";
 import { mutedPref } from "@/lib/stored";
 
 import { useInstallPrompt, useIosInstallHint } from "./pwa";
@@ -30,7 +30,41 @@ interface Result {
 }
 
 const SWIPE_PX = 30;
+
+/** Reads announcements aloud with the device's voices: Marathi, Hindi and English (Indian) where available. */
+function speak(lines: Speech[]) {
+  if (typeof window === "undefined" || !window.speechSynthesis || mutedPref.get() === 1) return;
+  const synth = window.speechSynthesis;
+  const voices = synth.getVoices();
+  synth.cancel();
+  for (const line of lines) {
+    const base = line.lang.slice(0, 2);
+    // No Marathi voice? A Hindi one reads Devanagari fine.
+    const voice =
+      voices.find((v) => v.lang === line.lang) ?? voices.find((v) => v.lang.startsWith(base)) ?? (base === "mr" ? voices.find((v) => v.lang.startsWith("hi")) : undefined);
+    if (!voice && base !== "en") continue;
+    const u = new SpeechSynthesisUtterance(line.text);
+    u.lang = voice?.lang ?? line.lang;
+    if (voice) u.voice = voice;
+    u.rate = 0.92;
+    u.pitch = 1.05;
+    synth.speak(u);
+  }
+}
 const EMPTY_HUD: Hud = { score: 0, coins: 0, distance: 0, lifelines: 1, chase: false, meter: null };
+/** Pixels of drag for full speed on the floating joystick. */
+const STICK_PX = 56;
+
+const MOVE_KEYS: Record<string, [number, number]> = {
+  ArrowLeft: [-1, 0],
+  KeyA: [-1, 0],
+  ArrowRight: [1, 0],
+  KeyD: [1, 0],
+  ArrowUp: [0, -1],
+  KeyW: [0, -1],
+  ArrowDown: [0, 1],
+  KeyS: [0, 1],
+};
 
 const KEY_ACTIONS: Record<string, Action> = {
   ArrowLeft: "left",
@@ -47,12 +81,21 @@ const KEY_ACTIONS: Record<string, Action> = {
 /** Full-screen canvas game with title, pause, lifeline and game-over screens. Works for any GameDef. */
 export function GameShell({ def }: { def: GameDef }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const glRef = useRef<HTMLCanvasElement>(null);
   const viewRef = useRef<View | null>(null);
   const gameRef = useRef<ArcadeGame | null>(null);
   const demoRef = useRef<ArcadeGame | null>(null);
   const screenRef = useRef<Screen>("home");
   const sfxRef = useRef<Sfx | null>(null);
-  const swipeRef = useRef<{ x: number; y: number; done: boolean } | null>(null);
+  const swipeRef = useRef<{ x: number; y: number; done: boolean; t: number } | null>(null);
+  /** 360° look drag in progress: last pointer position. */
+  const lookRef = useRef<{ id: number; x: number; y: number; moved: boolean } | null>(null);
+  /** Touch points for pinch zoom, and the last pinch distance. */
+  const touchesRef = useRef(new Map<number, { x: number; y: number }>());
+  const pinchRef = useRef<number | null>(null);
+  const stickRef = useRef<HTMLDivElement>(null);
+  const heldRef = useRef(new Set<string>());
+  const stick = def.control === "stick";
 
   const [screen, setScreen] = useState<Screen>("home");
   const [hud, setHud] = useState<Hud>(EMPTY_HUD);
@@ -71,6 +114,13 @@ export function GameShell({ def }: { def: GameDef }) {
   }, []);
 
   const go = useCallback((next: Screen) => {
+    if (next !== "playing") {
+      heldRef.current.clear();
+      gameRef.current?.steer?.(0, 0);
+      sfxRef.current?.setRumble(0);
+      if (typeof window !== "undefined") window.speechSynthesis?.cancel();
+      if (stickRef.current) stickRef.current.style.display = "none";
+    }
     screenRef.current = next;
     setScreen(next);
   }, []);
@@ -105,6 +155,7 @@ export function GameShell({ def }: { def: GameDef }) {
     const game: ArcadeGame = def.create(
       {
         onSound: s.play,
+        onSpeak: speak,
         onCrash: (reason) => {
           s.setSiren(false);
           setCrash(reason);
@@ -172,9 +223,33 @@ export function GameShell({ def }: { def: GameDef }) {
   // Render loop. Runs for the whole lifetime of the page; the title screen shows an autopilot demo run.
   useEffect(() => {
     const canvas = canvasRef.current;
-    // Opaque canvas: the browser can skip blending it with the page behind.
-    const ctx = canvas?.getContext("2d", { alpha: false });
+    // 2D games: an opaque canvas, so the browser can skip blending. 3D games: a transparent HUD layer
+    // over the WebGL canvas.
+    const ctx = canvas?.getContext("2d", { alpha: !!def.scene3d });
     if (!canvas || !ctx) return;
+    let scene3d: Scene3D | null = null;
+    let disposed = false;
+    if (def.scene3d && glRef.current) {
+      def
+        .scene3d(glRef.current)
+        .then((sc) => {
+          if (disposed) {
+            sc.dispose();
+            return;
+          }
+          scene3d = sc;
+          resize();
+          // If the GPU drops the 3D context (low memory, too many tabs), carry on in 2D.
+          glRef.current?.addEventListener("webglcontextlost", (e) => {
+            e.preventDefault();
+            scene3d = null;
+            if (glRef.current) glRef.current.style.display = "none";
+          });
+        })
+        .catch(() => {
+          // No WebGL: keep the 2D renderer.
+        });
+    }
     demoRef.current = def.create({}, true);
 
     // Render resolution. Starts at the screen's pixel density (capped lower on phones, where fill
@@ -192,6 +267,7 @@ export function GameShell({ def }: { def: GameDef }) {
       ctx.setTransform(scale, 0, 0, scale, 0, 0);
       const camX = viewRef.current?.camX ?? 0;
       viewRef.current = { ...def.makeView(w, h), camX };
+      scene3d?.resize(w, h, scale);
     };
     resize();
     const observer = new ResizeObserver(resize);
@@ -226,11 +302,18 @@ export function GameShell({ def }: { def: GameDef }) {
       if (live) clock += dt;
       if (game && viewRef.current) {
         if (live) game.update(dt);
-        def.render(ctx, viewRef.current, game, clock);
+        if (scene3d && def.overlay3d) {
+          scene3d.render(game, clock, live ? dt : 0);
+          ctx.clearRect(0, 0, viewRef.current.w, viewRef.current.h);
+          def.overlay3d(ctx, viewRef.current, game, clock, scene3d.project);
+        } else {
+          def.render(ctx, viewRef.current, game, clock);
+        }
       }
       if (s === "playing" && gameRef.current) {
         const g = gameRef.current;
         sfxRef.current?.setSiren(g.chaseT > 0);
+        if (g.rumble !== undefined) sfxRef.current?.setRumble(g.rumble);
         if (now - lastHud > 100) {
           lastHud = now;
           setHud(readHud(g));
@@ -244,6 +327,8 @@ export function GameShell({ def }: { def: GameDef }) {
     };
     document.addEventListener("visibilitychange", onHidden);
     return () => {
+      disposed = true;
+      scene3d?.dispose();
       cancelAnimationFrame(raf);
       observer.disconnect();
       document.removeEventListener("visibilitychange", onHidden);
@@ -261,6 +346,47 @@ export function GameShell({ def }: { def: GameDef }) {
           pause();
           return;
         }
+        // + / - zoom the 3D camera.
+        if (def.look3d && ["Equal", "Minus", "NumpadAdd", "NumpadSubtract"].includes(e.code)) {
+          e.preventDefault();
+          gameRef.current?.zoomBy?.(e.code === "Equal" || e.code === "NumpadAdd" ? 1.15 : 1 / 1.15);
+          return;
+        }
+        if (stick) {
+          if (MOVE_KEYS[e.code]) {
+            e.preventDefault();
+            heldRef.current.add(e.code);
+            steerFromKeys();
+            return;
+          }
+          if (def.look3d && (e.code === "KeyQ" || e.code === "KeyE")) {
+            e.preventDefault();
+            gameRef.current?.look?.(e.code === "KeyQ" ? 0.12 : -0.12, 0);
+            return;
+          }
+          const button = def.buttons?.find((b) => b.keys.includes(e.code));
+          if (button) {
+            e.preventDefault();
+            if (!e.repeat) act(button.action);
+            return;
+          }
+          if (e.code === "Space" || e.code === "Enter") {
+            e.preventDefault();
+            if (!e.repeat) act("up");
+          }
+          return;
+        }
+        if (def.look3d && (e.code === "KeyQ" || e.code === "KeyE")) {
+          e.preventDefault();
+          gameRef.current?.look?.(e.code === "KeyQ" ? 0.12 : -0.12, 0);
+          return;
+        }
+        const button = def.buttons?.find((b) => b.keys.includes(e.code));
+        if (button) {
+          e.preventDefault();
+          if (!e.repeat) act(button.action);
+          return;
+        }
         const action = KEY_ACTIONS[e.code];
         if (!action) return;
         e.preventDefault();
@@ -276,16 +402,99 @@ export function GameShell({ def }: { def: GameDef }) {
       else return;
       e.preventDefault();
     };
+    const steerFromKeys = () => {
+      let x = 0;
+      let y = 0;
+      for (const code of heldRef.current) {
+        x += MOVE_KEYS[code][0];
+        y += MOVE_KEYS[code][1];
+      }
+      gameRef.current?.steer?.(Math.sign(x), Math.sign(y));
+      if (x || y) setHint(false);
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (!stick || !heldRef.current.delete(e.code)) return;
+      steerFromKeys();
+    };
+    const onBlur = () => {
+      heldRef.current.clear();
+      gameRef.current?.steer?.(0, 0);
+    };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [act, go, pause, start, spendLifeline]);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, [act, def, go, pause, start, spendLifeline, stick]);
 
   // Swipe anywhere on the play area. No on-screen buttons, so the whole screen stays visible.
+  // Stick games: a floating joystick wherever the thumb lands; a quick tap is the action.
+  const placeStick = (x: number, y: number, kx: number, ky: number) => {
+    const el = stickRef.current;
+    if (!el) return;
+    el.style.display = "block";
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+    const knob = el.firstElementChild as HTMLElement | null;
+    if (knob) knob.style.transform = `translate(${kx}px, ${ky}px)`;
+  };
   const onPointerDown = (e: PointerEvent) => {
-    if (screenRef.current === "playing") swipeRef.current = { x: e.clientX, y: e.clientY, done: false };
+    if (screenRef.current !== "playing") return;
+    if (def.look3d && e.pointerType === "touch") {
+      touchesRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (touchesRef.current.size === 2) {
+        // Two fingers: pinch to zoom instead of looking or swiping.
+        const [a, b] = [...touchesRef.current.values()];
+        pinchRef.current = Math.hypot(a.x - b.x, a.y - b.y);
+        lookRef.current = null;
+        swipeRef.current = null;
+        return;
+      }
+    }
+    if (def.look3d && (e.pointerType === "mouse" || e.clientX > window.innerWidth * 0.55)) {
+      lookRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
+      return;
+    }
+    swipeRef.current = { x: e.clientX, y: e.clientY, done: false, t: performance.now() };
+    if (stick) placeStick(e.clientX, e.clientY, 0, 0);
   };
   const onPointerMove = (e: PointerEvent) => {
+    if (touchesRef.current.has(e.pointerId)) touchesRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinchRef.current !== null && touchesRef.current.size >= 2) {
+      const [a, b] = [...touchesRef.current.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (d > 0 && pinchRef.current > 0) gameRef.current?.zoomBy?.(d / pinchRef.current);
+      pinchRef.current = d;
+      return;
+    }
+    const lk = lookRef.current;
+    if (lk && lk.id === e.pointerId) {
+      const dx = e.clientX - lk.x;
+      const dy = e.clientY - lk.y;
+      if (Math.abs(dx) + Math.abs(dy) > 2) lk.moved = true;
+      gameRef.current?.look?.(-dx * 0.006, -dy * 0.004);
+      lk.x = e.clientX;
+      lk.y = e.clientY;
+      return;
+    }
     const sw = swipeRef.current;
+    if (stick) {
+      if (!sw || screenRef.current !== "playing") return;
+      const dx = e.clientX - sw.x;
+      const dy = e.clientY - sw.y;
+      const len = Math.hypot(dx, dy);
+      if (len < 6) return;
+      sw.done = true;
+      const k = Math.min(1, len / STICK_PX);
+      gameRef.current?.steer?.((dx / len) * k, (dy / len) * k);
+      const knob = Math.min(len, STICK_PX);
+      placeStick(sw.x, sw.y, (dx / len) * knob, (dy / len) * knob);
+      setHint(false);
+      return;
+    }
     if (!sw || sw.done) return;
     const dx = e.clientX - sw.x;
     const dy = e.clientY - sw.y;
@@ -294,7 +503,25 @@ export function GameShell({ def }: { def: GameDef }) {
     if (Math.abs(dx) > Math.abs(dy)) act(dx < 0 ? "left" : "right");
     else act(dy < 0 ? "up" : "down");
   };
-  const onPointerUp = () => {
+  const onPointerUp = (e: PointerEvent) => {
+    touchesRef.current.delete(e.pointerId);
+    if (pinchRef.current !== null) {
+      if (touchesRef.current.size < 2) pinchRef.current = null;
+      return;
+    }
+    const lk = lookRef.current;
+    if (lk && lk.id === e.pointerId) {
+      lookRef.current = null;
+      // In stick games a tap without dragging still counts as the action.
+      if (!lk.moved && stick) act("up");
+      return;
+    }
+    const sw = swipeRef.current;
+    if (stick) {
+      if (sw && !sw.done && performance.now() - sw.t < 300) act("up");
+      gameRef.current?.steer?.(0, 0);
+      if (stickRef.current) stickRef.current.style.display = "none";
+    }
     swipeRef.current = null;
   };
 
@@ -308,12 +535,16 @@ export function GameShell({ def }: { def: GameDef }) {
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
+      onWheel={(e) => {
+        if (def.look3d && screenRef.current === "playing") gameRef.current?.zoomBy?.(e.deltaY < 0 ? 1.1 : 1 / 1.1);
+      }}
     >
+      {def.scene3d && <canvas ref={glRef} className="game-canvas" aria-hidden />}
       <canvas ref={canvasRef} className="game-canvas" aria-label={def.canvasLabel} role="img" />
 
       {screen === "playing" && (
         <>
-          <div className="hud">
+          <div className={def.hud === "minimal" ? "hud hud-minimal" : "hud"}>
             <div className="hud-card hud-score-card">
               <span className="hud-label">Score</span>
               <span className="hud-score" aria-label="Score">
@@ -339,12 +570,33 @@ export function GameShell({ def }: { def: GameDef }) {
               </button>
             </div>
           </div>
-          {hud.chase && <div className="chase-banner">{def.chaseText}</div>}
+          {hud.chase && def.hud !== "minimal" && <div className="chase-banner">{def.chaseText}</div>}
+          {def.buttons && (
+            <div className="action-pad" role="group" aria-label="Moves">
+              {def.buttons.filter((b) => b.touch !== false).map((b) => (
+                <button
+                  key={b.action}
+                  type="button"
+                  className={`act-btn act-${b.action}`}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    act(b.action);
+                  }}
+                >
+                  {b.label}
+                </button>
+              ))}
+            </div>
+          )}
           {hud.meter && <MeterBar meter={hud.meter} />}
+          <div className="stick" ref={stickRef} aria-hidden>
+            <span />
+          </div>
           {hint && (
             <div className="swipe-hint" aria-hidden>
               <div className="swipe-hand" />
-              <p>Swipe anywhere</p>
+              <p>{def.look3d ? (stick ? "Left side: move • Right side: look around" : "Swipe left side • Drag right side to look around") : stick ? "Drag to move" : "Swipe anywhere"}</p>
               <ul>
                 {def.gestures.map(([g, t]) => (
                   <li key={g}>
@@ -478,11 +730,14 @@ export function GameShell({ def }: { def: GameDef }) {
             {result.newBest ? <p className="new-best">New best score!</p> : <p className="best">Best: {best.toLocaleString()}</p>}
             <dl className="stats">
               <div>
-                <dt>Distance</dt>
-                <dd>{result.distance.toLocaleString()} m</dd>
+                <dt>{def.resultLabels?.[0] ?? "Distance"}</dt>
+                <dd>
+                  {result.distance.toLocaleString()}
+                  {def.resultUnit ?? " m"}
+                </dd>
               </div>
               <div>
-                <dt>Coins</dt>
+                <dt>{def.resultLabels?.[1] ?? "Coins"}</dt>
                 <dd>{result.coins}</dd>
               </div>
             </dl>

@@ -1,5 +1,6 @@
 import { railBest } from "@/lib/stored";
 
+import { sirenGlow } from "../shared/scene";
 import type { GameDef } from "../shared/types";
 
 import { BELL_COOLDOWN } from "./constants";
@@ -47,6 +48,9 @@ export const railDef: GameDef<RailGame> = {
   create: (events, ghost) => new RailGame(events, ghost),
   makeView: makeRailView,
   render: renderRail,
+  // Real 3D line; the 2D renderer above is the fallback without WebGL.
+  scene3d: (canvas) => import("./scene3d").then((m) => m.createRailScene(canvas)),
+  overlay3d: (ctx, v, g, clock) => sirenGlow(ctx, v, clock, g.chaseT),
   meter: (g) => ({
     label: "BELL",
     value: 1 - g.cart.bellT / BELL_COOLDOWN,

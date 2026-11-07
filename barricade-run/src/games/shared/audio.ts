@@ -99,6 +99,23 @@ export class Sfx {
       this.tone("sine", 2093, 2080, 0.4, 0.1, 0.02);
       this.tone("sine", 1568, 1560, 0.4, 0.14, 0.18);
     },
+    whistle: () => {
+      this.tone("sine", 2200, 2400, 0.12, 0.12);
+      this.tone("sine", 2200, 2600, 0.25, 0.12, 0.15);
+    },
+    level: () => {
+      this.tone("triangle", 523, 523, 0.12, 0.2);
+      this.tone("triangle", 659, 659, 0.12, 0.2, 0.1);
+      this.tone("triangle", 784, 1046, 0.3, 0.2, 0.2);
+    },
+    hit: () => {
+      this.noise(0.08, 0.35, 180);
+      this.tone("sine", 140, 60, 0.12, 0.3);
+    },
+    cheer: () => {
+      this.noise(1.2, 0.12, 900);
+      this.noise(0.9, 0.08, 1600);
+    },
     horn: () => {
       this.tone("sawtooth", 415, 410, 0.35, 0.09);
       this.tone("sawtooth", 523, 518, 0.35, 0.07);
@@ -106,6 +123,56 @@ export class Sfx {
   };
 
   play = (sound: Sound) => this.sounds[sound]();
+
+  private rumbleNode: { src: AudioBufferSourceNode; gain: GainNode; filter: BiquadFilterNode; hum: OscillatorNode; humGain: GainNode } | null = null;
+  private lastClack = 0;
+
+  /** Electric local train: motor hum and wheel rumble that rise with speed, plus clacks over rail joints. Call every frame. */
+  setRumble(level: number) {
+    if (!this.ctx || !this.master) return;
+    const ctx = this.ctx;
+    if (!this.rumbleNode && level > 0.01) {
+      const len = ctx.sampleRate * 2;
+      const buffer = ctx.createBuffer(1, len, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      let last = 0;
+      for (let i = 0; i < len; i++) {
+        last = last * 0.97 + (Math.random() * 2 - 1) * 0.03;
+        data[i] = last * 6;
+      }
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.loop = true;
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.value = 300;
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      src.connect(filter).connect(gain).connect(this.master);
+      src.start();
+      const hum = ctx.createOscillator();
+      hum.type = "sawtooth";
+      hum.frequency.value = 90;
+      const humGain = ctx.createGain();
+      humGain.gain.value = 0;
+      hum.connect(humGain).connect(this.master);
+      hum.start();
+      this.rumbleNode = { src, gain, filter, hum, humGain };
+    }
+    const r = this.rumbleNode;
+    if (!r) return;
+    const t = ctx.currentTime;
+    r.gain.gain.setTargetAtTime(this.muted ? 0 : level * 0.55, t, 0.3);
+    r.filter.frequency.setTargetAtTime(180 + level * 520, t, 0.3);
+    r.hum.frequency.setTargetAtTime(70 + level * 180, t, 0.4);
+    r.humGain.gain.setTargetAtTime(this.muted ? 0 : level * 0.018, t, 0.3);
+    // Wheels over a rail joint: a double clack, faster at speed.
+    if (level > 0.25 && t - this.lastClack > 0.9 / level) {
+      this.lastClack = t;
+      this.tone("square", 120, 70, 0.05, 0.12 * level);
+      this.tone("square", 110, 60, 0.05, 0.1 * level, 0.11);
+    }
+  }
 
   /** Two-tone police siren while the chase is on. Safe to call every frame. */
   setSiren(on: boolean) {

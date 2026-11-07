@@ -21,6 +21,13 @@ const OBSOLETE = [
   "src/game/audio.ts",
   "src/game/constants.ts",
   "src/components/barricade-run.tsx",
+  // v4: Jantar Mantar Protest removed.
+  "src/games/rally/def.ts",
+  "src/games/rally/engine.ts",
+  "src/games/rally/map.ts",
+  "src/games/rally/play.tsx",
+  "src/games/rally/render.ts",
+  "src/app/rally/page.tsx",
 ];
 /** Drawn by scripts/generate-icons.mjs on the target machine instead of being embedded (keeps the script small). */
 const GENERATED = [

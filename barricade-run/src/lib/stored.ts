@@ -40,4 +40,6 @@ export function storedNumber(key: string, fallback = 0) {
 export const bestScore = storedNumber("barricade-run:best");
 export const driveBest = storedNumber("barricade-run:drive-best");
 export const railBest = storedNumber("barricade-run:rail-best");
+export const localBest = storedNumber("barricade-run:local-best");
+export const dangalBest = storedNumber("barricade-run:dangal-best");
 export const mutedPref = storedNumber("barricade-run:muted");

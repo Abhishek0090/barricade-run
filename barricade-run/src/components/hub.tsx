@@ -5,16 +5,17 @@ import { useEffect, useRef } from "react";
 
 import { GAMES } from "@/games/registry";
 import { ARCADE_NAME, AUTHOR, HEADLINES } from "@/games/shared/constants";
-import type { GameDef } from "@/games/shared/types";
+import type { GameDef, Scene3D } from "@/games/shared/types";
 import { mutedPref } from "@/lib/stored";
 
 import { useInstallPrompt, useIosInstallHint } from "./pwa";
 
-const GENRES: Record<string, string> = { run: "Runner", drive: "Racer", rail: "Rail rush" };
+const GENRES: Record<string, string> = { run: "Runner", drive: "Racer", rail: "Rail rush", dangal: "Wrestling", local: "Train sim" };
 
 /** Live autopilot preview of a game, drawn only while the card is on screen. */
 function Preview({ def }: { def: GameDef }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const glRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const canvas = ref.current;
@@ -25,6 +26,25 @@ function Preview({ def }: { def: GameDef }) {
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const scale = Math.min(window.devicePixelRatio || 1, 1.5);
     let view = def.makeView(1, 1);
+    // 3D games preview in 3D on their own WebGL canvas; the 2D canvas is the fallback.
+    let scene3d: Scene3D | null = null;
+    let disposed = false;
+    let clock = 3;
+    const draw = () => {
+      if (scene3d) scene3d.render(game, clock, 1 / 30);
+      else def.render(ctx, view, game, clock);
+    };
+    if (def.scene3d && glRef.current) {
+      def
+        .scene3d(glRef.current)
+        .then((sc) => {
+          if (disposed) return sc.dispose();
+          scene3d = sc;
+          canvas.style.visibility = "hidden";
+          resize();
+        })
+        .catch(() => {});
+    }
     const resize = () => {
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
@@ -32,7 +52,8 @@ function Preview({ def }: { def: GameDef }) {
       canvas.height = Math.max(1, Math.round(h * scale));
       ctx.setTransform(scale, 0, 0, scale, 0, 0);
       view = def.makeView(w, h);
-      def.render(ctx, view, game, 3);
+      scene3d?.resize(w, h, scale);
+      draw();
     };
     resize();
     const observer = new ResizeObserver(resize);
@@ -46,30 +67,36 @@ function Preview({ def }: { def: GameDef }) {
 
     let raf = 0;
     let last = performance.now();
-    let clock = 3;
     let acc = 0;
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       if (!visible || document.hidden || still) return;
-      // 30 fps is plenty for a thumbnail and keeps three previews cheap.
+      // 30 fps is plenty for a thumbnail and keeps the previews cheap.
       acc += dt;
       if (acc < 1 / 30) return;
       game.update(acc);
       clock += acc;
       acc = 0;
-      def.render(ctx, view, game, clock);
+      draw();
     };
     raf = requestAnimationFrame(frame);
     return () => {
+      disposed = true;
+      scene3d?.dispose();
       cancelAnimationFrame(raf);
       observer.disconnect();
       seen.disconnect();
     };
   }, [def]);
 
-  return <canvas ref={ref} className="card-canvas" aria-hidden />;
+  return (
+    <>
+      {def.scene3d && <canvas ref={glRef} className="card-canvas card-gl" aria-hidden />}
+      <canvas ref={ref} className="card-canvas" aria-hidden />
+    </>
+  );
 }
 
 function GameCard({ def, index }: { def: GameDef; index: number }) {
@@ -126,7 +153,7 @@ export function Hub() {
         <h1 className="hub-title" aria-label={ARCADE_NAME}>
           BARRICADE<span>ARCADE</span>
         </h1>
-        <p className="hub-sub">Three street games from the protest. Run with the march, drive through the chakka jam, ride the rails at the rail roko.</p>
+        <p className="hub-sub">Five games in 3D. Run with the march, drive through the chakka jam, ride the rails at the rail roko, take the fight into the wrestling ring, and drive the Mumbai local as motorman from Kalyan to CSMT.</p>
         <p className="author-chip">
           <span className="author-dot" aria-hidden /> by {AUTHOR}
         </p>

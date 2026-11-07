@@ -1,6 +1,6 @@
 // Barricade Arcade service worker: caches the hub and the games so they install and play offline.
-const CACHE = "barricade-arcade-v2";
-const CORE = ["/", "/run/", "/drive/", "/rail/", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/icon-maskable-512.png"];
+const CACHE = "barricade-arcade-v7";
+const CORE = ["/", "/run/", "/drive/", "/rail/", "/dangal/", "/local/", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/icon-maskable-512.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(CORE)).then(() => self.skipWaiting()));

@@ -501,7 +501,7 @@ function drawTaxi(ctx: Ctx, v: View, game: DriveGame, clock: number) {
 }
 
 /** Streaks at the screen edges while the nitro is burning. */
-function speedLines(ctx: Ctx, v: View, clock: number) {
+export function speedLines(ctx: Ctx, v: View, clock: number) {
   ctx.strokeStyle = "rgba(200, 230, 255, 0.35)";
   ctx.lineWidth = 2;
   ctx.beginPath();

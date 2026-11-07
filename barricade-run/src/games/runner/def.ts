@@ -1,5 +1,6 @@
 import { bestScore } from "@/lib/stored";
 
+import { sirenGlow } from "../shared/scene";
 import type { GameDef } from "../shared/types";
 
 import { RunnerGame } from "./engine";
@@ -41,4 +42,7 @@ export const runnerDef: GameDef<RunnerGame> = {
   create: (events, ghost) => new RunnerGame(events, ghost),
   makeView: makeRunnerView,
   render: renderRunner,
+  // Real 3D street; the 2D renderer above is the fallback without WebGL.
+  scene3d: (canvas) => import("./scene3d").then((m) => m.createRunnerScene(canvas)),
+  overlay3d: (ctx, v, g, clock) => sirenGlow(ctx, v, clock, g.chaseT),
 };

@@ -1,10 +1,11 @@
 import { driveBest } from "@/lib/stored";
 
+import { sirenGlow } from "../shared/scene";
 import type { GameDef } from "../shared/types";
 
 import { BOOST_COST, BOOST_TIME } from "./constants";
 import { DriveGame } from "./engine";
-import { makeDriveView, renderDrive } from "./render";
+import { makeDriveView, renderDrive, speedLines } from "./render";
 
 export const driveDef: GameDef<DriveGame> = {
   id: "drive",
@@ -44,6 +45,12 @@ export const driveDef: GameDef<DriveGame> = {
   create: (events, ghost) => new DriveGame(events, ghost),
   makeView: makeDriveView,
   render: renderDrive,
+  // Real 3D highway; the 2D renderer above is the fallback without WebGL.
+  scene3d: (canvas) => import("./scene3d").then((m) => m.createDriveScene(canvas)),
+  overlay3d: (ctx, v, g, clock) => {
+    if (g.boosting) speedLines(ctx, v, clock);
+    sirenGlow(ctx, v, clock, g.chaseT);
+  },
   meter: (g) => ({
     label: "NITRO",
     value: g.boosting ? g.car.boostT / BOOST_TIME : g.car.nitro,

@@ -135,13 +135,13 @@ export class DriveGame implements ArcadeGame {
 
   input(action: Action) {
     if (this.status !== "running") return;
-    if (action === "left") this.steer(-1);
-    else if (action === "right") this.steer(1);
+    if (action === "left") this.changeLane(-1);
+    else if (action === "right") this.changeLane(1);
     else if (action === "up") this.boost();
     else this.brake();
   }
 
-  private steer(dir: -1 | 1) {
+  private changeLane(dir: -1 | 1) {
     const c = this.car;
     const target = Math.max(0, Math.min(LANE_COUNT - 1, c.lane + dir));
     if (target === c.lane) return;
@@ -258,7 +258,7 @@ export class DriveGame implements ArcadeGame {
     if (!free.length) return;
     const target = free.sort((a, b) => Math.abs(a - c.lane) - Math.abs(b - c.lane))[0];
     const dir = Math.sign(target - c.lane) as -1 | 1;
-    if (target !== c.lane && !ahead(c.lane + dir, -5, CAR_LEN + 3)) this.steer(dir);
+    if (target !== c.lane && !ahead(c.lane + dir, -5, CAR_LEN + 3)) this.changeLane(dir);
   }
 
   private collide() {
