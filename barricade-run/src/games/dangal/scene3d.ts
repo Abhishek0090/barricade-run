@@ -22,7 +22,7 @@ const ROPE_COLORS = [0xff9933, 0xffffff, 0x138808];
 /** Engine position to world position. */
 const world = (x: number, z: number, y = 0) => new THREE.Vector3(x, y, RING_Z / 2 - z);
 
-const SIGNS = ["DANGAL!", "JUSTICE", "RE-NEET", "जय हो", "NO DHANDLI", "SHER!", "RANI!", "WE WANT TITLE", "VOTE CHOR OUT", "CHHOTU!"];
+const SIGNS = ["SLAM NIGHT!", "THUNDER!", "BLAZE ON", "CYCLONE!", "THIS IS AWESOME", "NEW CHAMP!", "WE WANT TABLES", "1-2-3!", "BOO KING", "HOLY COW!"];
 
 // ---- wrestler rig ------------------------------------------------------------------------
 
@@ -90,7 +90,7 @@ export async function createDangalScene(canvas: HTMLCanvasElement): Promise<Scen
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.15;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0b0618);
@@ -106,7 +106,7 @@ export async function createDangalScene(canvas: HTMLCanvasElement): Promise<Scen
   key.position.set(0, 13, 3);
   key.target.position.set(0, 0, 0);
   key.castShadow = true;
-  key.shadow.mapSize.set(coarse ? 1024 : 2048, coarse ? 1024 : 2048);
+  key.shadow.mapSize.set(coarse ? 512 : 1024, coarse ? 512 : 1024);
   key.shadow.bias = -0.0004;
   scene.add(key, key.target);
   const sweep: { light: THREE.SpotLight; cone: THREE.Mesh; phase: number }[] = [];
@@ -141,7 +141,7 @@ export async function createDangalScene(canvas: HTMLCanvasElement): Promise<Scen
   const apronTex = canvasTexture(1024, 96, (c) => {
     c.fillStyle = "#14102b";
     c.fillRect(0, 0, 1024, 96);
-    centreText(c, "DANGAL SHOWDOWN  •  JANTAR MANTAR  •  NEW DELHI", 512, 50, 46, "#ffd447", 980);
+    centreText(c, "SLAM NIGHT  •  CHAMPIONSHIP WRESTLING  •  LIVE", 512, 50, 46, "#ffd447", 980);
   });
   const apronMat = new THREE.MeshStandardMaterial({ map: apronTex, roughness: 0.8 });
   const matTex = canvasTexture(1024, 512, (c) => {
@@ -157,7 +157,7 @@ export async function createDangalScene(canvas: HTMLCanvasElement): Promise<Scen
     c.beginPath();
     c.ellipse(512, 256, 260, 200, 0, 0, Math.PI * 2);
     c.fill();
-    centreText(c, "DANGAL", 512, 256, 150, "rgba(122, 31, 61, 0.55)", 900, true);
+    centreText(c, "SLAM", 512, 256, 150, "rgba(122, 31, 61, 0.55)", 900, true);
   });
   const platform = new THREE.Mesh(new THREE.BoxGeometry(RX * 2 + 0.6, 1.05, RZ * 2 + 0.6), [apronMat, apronMat, new THREE.MeshStandardMaterial({ map: matTex, roughness: 0.85 }), apronMat, apronMat, apronMat]);
   platform.position.y = -0.525;
@@ -210,8 +210,8 @@ export async function createDangalScene(canvas: HTMLCanvasElement): Promise<Scen
     g.addColorStop(1, "#3b0f5c");
     c.fillStyle = g;
     c.fillRect(0, 0, 1024, 256);
-    centreText(c, "DANGAL SHOWDOWN", 512, 110, 110, "#ffffff", 980, true);
-    centreText(c, "LIVE FROM JANTAR MANTAR", 512, 205, 52, "#ffd447", 960);
+    centreText(c, "SLAM NIGHT", 512, 110, 110, "#ffffff", 980, true);
+    centreText(c, "CHAMPIONSHIP WRESTLING • LIVE", 512, 205, 52, "#ffd447", 960);
   });
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(12, 3), new THREE.MeshBasicMaterial({ map: screenTex, toneMapped: false }));
   screen.position.set(0, 9.5, -17);
@@ -317,7 +317,7 @@ export async function createDangalScene(canvas: HTMLCanvasElement): Promise<Scen
   return {
     resize(w, h, pixelRatio) {
       view = { w, h };
-      renderer.setPixelRatio(Math.min(pixelRatio, 2));
+      renderer.setPixelRatio(Math.min(pixelRatio, coarse ? 1.25 : 1.5));
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
       camera.fov = w < h ? 58 : 40;

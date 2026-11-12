@@ -7,14 +7,14 @@ import { drawDangalOverlay, makeDangalView, renderDangal } from "./render";
 
 export const dangalDef: GameDef<DangalGame> = {
   id: "dangal",
-  title: "DANGAL",
-  titleAccent: "SHOWDOWN",
-  eyebrow: "Wrestling • Live from Jantar Mantar • 5-match ladder",
+  title: "SLAM",
+  titleAccent: "NIGHT",
+  eyebrow: "Wrestling • Championship night • 5-match title ladder",
   tagline:
-    "The wrestlers take their protest into the ring. Pick your pehelwan, then punch, kick, slam and pin your way past five fictional villains to the federation boss Kursi Kumar, who brings a steel chair. Win the belt, then defend it.",
+    "A WWE-style championship night. Pick Thunder Singh, Rani Blaze or Kid Cyclone, then punch, kick, slam and pin your way up the ladder: Brick Bouncer, Iron Danda, Venom Vikram, Dr. Destructo and the champion King Kursi, who brings a steel chair. Win the belt, then defend it. All wrestlers are fictional.",
   blurb: "WWE-style ring fights. Combos, slams, finishers and the 1-2-3 pin.",
   color: "#c77dff",
-  canvasLabel: "Game view: a 3D wrestling ring in a packed arena",
+  canvasLabel: "Game view: a wrestling ring in a packed arena",
   chaseText: "",
   crashTitle: "PINNED!",
   overTitle: "1... 2... 3!",

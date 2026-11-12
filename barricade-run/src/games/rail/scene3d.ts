@@ -297,23 +297,11 @@ export async function createRailScene(canvas: HTMLCanvasElement): Promise<Scene3
   scene.add(fields);
   const strips: ScrollStrip[] = [];
   const bed = new ScrollStrip(scene, -BALLAST_HALF - 0.9, BALLAST_HALF + 0.9, 0.01, NEAR, FAR, 2.2, "rail-bed", (c, w, h) => {
-    c.fillStyle = "#8a7d6e";
+    c.fillStyle = "#ab9f8b";
     c.fillRect(0, 0, w, h);
     for (let i = 0; i < 900; i++) {
       c.fillStyle = Math.random() > 0.5 ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.1)";
       c.fillRect(Math.random() * w, Math.random() * h, 3, 3);
-    }
-    // Two concrete sleepers per tile under each of the three tracks.
-    const span = (BALLAST_HALF + 0.9) * 2;
-    for (const lane of [-1, 0, 1]) {
-      const u0 = ((lane * LANE_W - 1.15 + span / 2) / span) * w;
-      const u1 = ((lane * LANE_W + 1.15 + span / 2) / span) * w;
-      for (const v of [0.12, 0.62]) {
-        c.fillStyle = "#b3ada4";
-        c.fillRect(u0, v * h, u1 - u0, h * 0.13);
-        c.fillStyle = "rgba(0,0,0,0.2)";
-        c.fillRect(u0, (v + 0.11) * h, u1 - u0, h * 0.02);
-      }
     }
   }, 512, 256, 0.95, SEGS);
   strips.push(bed);
@@ -338,8 +326,35 @@ export async function createRailScene(canvas: HTMLCanvasElement): Promise<Scene3
       }, 256, 64, 1, SEGS),
     );
   }
-  const walls = new Segments(scene, mat("#8f887c", 0.9), 0.2, PLATFORM_H, 60);
-  const rails = new Segments(scene, mat("#cfd4da", 0.25, 0.9), 0.1, 0.16, 300);
+  const walls = new Segments(scene, mat("#8f887c", 0.9), 0.2, PLATFORM_H, 120);
+  // Each line: a raised dark ballast bed, concrete sleepers, and rails with a dark web and a bright head.
+  const ballastTex = cachedTexture("rail-ballast3d", 64, 64, (c) => {
+    c.fillStyle = "#5f5852";
+    c.fillRect(0, 0, 64, 64);
+    for (let i = 0; i < 260; i++) {
+      c.fillStyle = Math.random() > 0.5 ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.18)";
+      c.fillRect(Math.random() * 64, Math.random() * 64, 2, 2);
+    }
+  });
+  const ballast = new Segments(scene, new THREE.MeshStandardMaterial({ map: ballastTex, roughness: 1 }), 2.5, 0.1, 280, false);
+  const sleepers = new Segments(scene, mat("#cfc8bc", 0.85), 2.1, 0.07, 420, false);
+  // Short 2 m pieces so the rails follow the curve without kinks.
+  const rails = new Segments(scene, mat("#4d5158", 0.5, 0.7), 0.09, 0.12, 520);
+  const railHeads = new Segments(scene, mat("#f1f4f8", 0.2, 0.95), 0.06, 0.03, 520, false);
+  // Red-and-white stop board where a line runs out ahead.
+  const stopBoards = new Pool<{ k: string }>(scene, () => {
+    const g3 = new THREE.Group();
+    const tex = cachedTexture("track-end-board", 128, 64, (c) => {
+      c.fillStyle = "#c1272d";
+      c.fillRect(0, 0, 128, 64);
+      c.fillStyle = "#ffffff";
+      c.fillRect(0, 24, 128, 16);
+    });
+    mesh(new THREE.BoxGeometry(2.2, 1.1, 0.12), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 }), g3, 0, 0.75, 0);
+    for (const x of [-0.9, 0.9]) mesh(new THREE.BoxGeometry(0.1, 0.3, 0.1), mat("#333"), g3, x, 0.15, 0);
+    return g3;
+  });
+  const stopKeys = new Map<string, { k: string }>();
   const wires = [-1, 0, 1].map(() => {
     const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(Array.from({ length: 24 }, () => new THREE.Vector3())), new THREE.LineBasicMaterial({ color: 0x2c3038 }));
     scene.add(line);
@@ -394,17 +409,39 @@ export async function createRailScene(canvas: HTMLCanvasElement): Promise<Scene3
         s.bend(curve);
       }
       walls.begin();
-      for (const side of [-1, 1]) for (let z = NEAR; z < FAR; z += 6) walls.add(side * PLATFORM_X, PLATFORM_H / 2, z, z + 6, curve);
+      for (const side of [-1, 1]) for (let z = NEAR; z < FAR; z += 3) walls.add(side * PLATFORM_X, PLATFORM_H / 2, z, z + 3.05, curve);
       walls.end();
-      rails.begin();
+      for (const m of [ballast, sleepers, rails, railHeads]) m.begin();
       for (const lane of [-1, 0, 1] as Track[]) {
+        const cx = lane * LANE_W;
         for (const [a, b] of railSpans(g, lane, NEAR, VIEW_DIST)) {
-          for (let z = a; z < b; z += 6) {
-            for (const gx of [-GAUGE_HALF, GAUGE_HALF]) rails.add(lane * LANE_W + gx, 0.14, z, Math.min(b, z + 6), curve);
+          for (let z = a; z < b; z += 2) {
+            const z1 = Math.min(b, z + 2.05);
+            ballast.add(cx, 0.04, z, z1, curve);
+            for (const gx of [-GAUGE_HALF, GAUGE_HALF]) {
+              rails.add(cx + gx, 0.16, z, z1, curve);
+              railHeads.add(cx + gx, 0.225, z, z1, curve);
+            }
+          }
+          // Sleepers stay put on the ground as the trolley rolls over them.
+          const gap = 1.1;
+          for (let k = Math.ceil((d + Math.max(a, NEAR)) / gap); k * gap - d < Math.min(b, 75); k++) {
+            const z = k * gap - d;
+            sleepers.add(cx, 0.1, z, z + 0.26, curve);
+          }
+          if (b < VIEW_DIST - 1) {
+            const key = `${lane}|${Math.round(b + d)}`;
+            let ref = stopKeys.get(key);
+            if (!ref) stopKeys.set(key, (ref = { k: key }));
+            const o = stopBoards.get(ref, "board");
+            o.position.set(cx + bend(b), 0, -b);
+            o.rotation.y = -yaw(b);
           }
         }
       }
-      rails.end();
+      for (const m of [ballast, sleepers, rails, railHeads]) m.end();
+      stopBoards.sweep();
+      if (stopKeys.size > 40) stopKeys.clear();
       for (const [i, line] of wires.entries()) {
         const pos = line.geometry.attributes.position;
         for (let j = 0; j < pos.count; j++) {

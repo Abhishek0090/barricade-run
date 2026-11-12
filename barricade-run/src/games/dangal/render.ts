@@ -30,7 +30,7 @@ function proj(f: Frame, x: number, z: number, y = 0) {
 
 // ---- arena ------------------------------------------------------------------
 
-const SIGNS = ["DANGAL!", "JUSTICE", "RE-NEET", "जय हो", "NO DHANDLI", "SHER!", "RANI!", "WE WANT TITLE", "VOTE CHOR OUT"];
+const SIGNS = ["SLAM NIGHT!", "THUNDER!", "BLAZE ON", "CYCLONE!", "THIS IS AWESOME", "NEW CHAMP!", "WE WANT TABLES", "1-2-3!", "BOO KING"];
 
 function drawArena(ctx: Ctx, v: View, f: Frame, g: DangalGame, clock: number) {
   const bg = ctx.createLinearGradient(0, 0, 0, v.h);
@@ -57,10 +57,10 @@ function drawArena(ctx: Ctx, v: View, f: Frame, g: DangalGame, clock: number) {
   ctx.font = `italic 900 ${sh * 0.42}px ${FONT}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText("DANGAL SHOWDOWN", v.cx, sy + sh * 0.42, sw * 0.92);
+  ctx.fillText("SLAM NIGHT", v.cx, sy + sh * 0.42, sw * 0.92);
   ctx.font = `800 ${sh * 0.2}px ${FONT}`;
   ctx.fillStyle = "#ffd447";
-  ctx.fillText("LIVE FROM JANTAR MANTAR", v.cx, sy + sh * 0.8, sw * 0.9);
+  ctx.fillText("CHAMPIONSHIP WRESTLING • LIVE", v.cx, sy + sh * 0.8, sw * 0.9);
 
   // Crowd in the stands: rows of heads, bouncing more when the crowd is hyped.
   const top = sy + sh + 14;
@@ -137,8 +137,8 @@ function drawRing(ctx: Ctx, f: Frame) {
   const skirt = f.s * 0.95;
   ctx.fillStyle = "#14102b";
   ctx.fillRect(a.x - f.s * 0.2, a.y, b.x - a.x + f.s * 0.4, skirt);
-  const apron = label("apron", 900, 70, (cc, w, h) => {
-    text(cc, "DANGAL SHOWDOWN  •  JANTAR MANTAR  •  NEW DELHI", w / 2, h / 2 + 2, h * 0.5, "#ffd447", w * 0.96);
+  const apron = label("apron-slam", 900, 70, (cc, w, h) => {
+    text(cc, "SLAM NIGHT  •  CHAMPIONSHIP WRESTLING  •  LIVE", w / 2, h / 2 + 2, h * 0.5, "#ffd447", w * 0.96);
   });
   ctx.drawImage(apron, a.x + (b.x - a.x) * 0.08, a.y + skirt * 0.25, (b.x - a.x) * 0.84, skirt * 0.5);
   // Mat.
@@ -169,7 +169,7 @@ function drawRing(ctx: Ctx, f: Frame) {
   ctx.font = `italic 900 ${f.s * 0.9}px ${FONT}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText("DANGAL", 0, 0);
+  ctx.fillText("SLAM", 0, 0);
   ctx.restore();
 }
 

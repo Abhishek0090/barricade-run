@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 import PlayDangal from "@/games/dangal/play";
 
 export const metadata: Metadata = {
-  title: "Dangal Showdown",
-  description: "WWE-style wrestling in a packed arena. Pick a protest wrestler, punch, kick, slam and pin your way past five fictional villains to win the belt.",
+  title: "Slam Night",
+  description: "WWE-style championship wrestling. Pick Thunder Singh, Rani Blaze or Kid Cyclone and fight up the ladder to King Kursi for the belt. All wrestlers are fictional.",
 };
 
 export default function DangalPage() {

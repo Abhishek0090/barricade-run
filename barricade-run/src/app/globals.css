@@ -1078,6 +1078,7 @@ kbd {
   color: var(--game);
 }
 
+
 /* 3D previews draw on a WebGL canvas stacked under the 2D one. */
 .card-gl {
   position: absolute;

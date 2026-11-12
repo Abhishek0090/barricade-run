@@ -81,7 +81,6 @@ const KEY_ACTIONS: Record<string, Action> = {
 /** Full-screen canvas game with title, pause, lifeline and game-over screens. Works for any GameDef. */
 export function GameShell({ def }: { def: GameDef }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const glRef = useRef<HTMLCanvasElement>(null);
   const viewRef = useRef<View | null>(null);
   const gameRef = useRef<ArcadeGame | null>(null);
   const demoRef = useRef<ArcadeGame | null>(null);
@@ -90,6 +89,7 @@ export function GameShell({ def }: { def: GameDef }) {
   const swipeRef = useRef<{ x: number; y: number; done: boolean; t: number } | null>(null);
   /** 360° look drag in progress: last pointer position. */
   const lookRef = useRef<{ id: number; x: number; y: number; moved: boolean } | null>(null);
+  const glRef = useRef<HTMLCanvasElement>(null);
   /** Touch points for pinch zoom, and the last pinch distance. */
   const touchesRef = useRef(new Map<number, { x: number; y: number }>());
   const pinchRef = useRef<number | null>(null);
@@ -255,7 +255,7 @@ export function GameShell({ def }: { def: GameDef }) {
     // Render resolution. Starts at the screen's pixel density (capped lower on phones, where fill
     // rate is the bottleneck) and steps down automatically if the device can't keep up.
     const coarse = window.matchMedia("(pointer: coarse)").matches;
-    let scale = Math.min(window.devicePixelRatio || 1, coarse ? 1.5 : 2);
+    let scale = Math.min(window.devicePixelRatio || 1, coarse ? 1.25 : 1.5);
     let slowFrames = 0;
     let sampled = 0;
 
@@ -346,10 +346,15 @@ export function GameShell({ def }: { def: GameDef }) {
           pause();
           return;
         }
-        // + / - zoom the 3D camera.
-        if (def.look3d && ["Equal", "Minus", "NumpadAdd", "NumpadSubtract"].includes(e.code)) {
+        // + / - zoom the camera.
+        if (def.zoomable && ["Equal", "Minus", "NumpadAdd", "NumpadSubtract"].includes(e.code)) {
           e.preventDefault();
           gameRef.current?.zoomBy?.(e.code === "Equal" || e.code === "NumpadAdd" ? 1.15 : 1 / 1.15);
+          return;
+        }
+        if (def.look3d && (e.code === "KeyQ" || e.code === "KeyE")) {
+          e.preventDefault();
+          gameRef.current?.look?.(e.code === "KeyQ" ? 0.12 : -0.12, 0);
           return;
         }
         if (stick) {
@@ -357,11 +362,6 @@ export function GameShell({ def }: { def: GameDef }) {
             e.preventDefault();
             heldRef.current.add(e.code);
             steerFromKeys();
-            return;
-          }
-          if (def.look3d && (e.code === "KeyQ" || e.code === "KeyE")) {
-            e.preventDefault();
-            gameRef.current?.look?.(e.code === "KeyQ" ? 0.12 : -0.12, 0);
             return;
           }
           const button = def.buttons?.find((b) => b.keys.includes(e.code));
@@ -374,11 +374,6 @@ export function GameShell({ def }: { def: GameDef }) {
             e.preventDefault();
             if (!e.repeat) act("up");
           }
-          return;
-        }
-        if (def.look3d && (e.code === "KeyQ" || e.code === "KeyE")) {
-          e.preventDefault();
-          gameRef.current?.look?.(e.code === "KeyQ" ? 0.12 : -0.12, 0);
           return;
         }
         const button = def.buttons?.find((b) => b.keys.includes(e.code));
@@ -443,17 +438,18 @@ export function GameShell({ def }: { def: GameDef }) {
   };
   const onPointerDown = (e: PointerEvent) => {
     if (screenRef.current !== "playing") return;
-    if (def.look3d && e.pointerType === "touch") {
+    if (def.zoomable && e.pointerType === "touch") {
       touchesRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (touchesRef.current.size === 2) {
-        // Two fingers: pinch to zoom instead of looking or swiping.
+        // Two fingers: pinch to zoom instead of swiping.
         const [a, b] = [...touchesRef.current.values()];
         pinchRef.current = Math.hypot(a.x - b.x, a.y - b.y);
-        lookRef.current = null;
         swipeRef.current = null;
+        lookRef.current = null;
         return;
       }
     }
+    // 360° look: a mouse drag anywhere, or a touch on the right of the screen.
     if (def.look3d && (e.pointerType === "mouse" || e.clientX > window.innerWidth * 0.55)) {
       lookRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
       return;
@@ -536,7 +532,7 @@ export function GameShell({ def }: { def: GameDef }) {
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
       onWheel={(e) => {
-        if (def.look3d && screenRef.current === "playing") gameRef.current?.zoomBy?.(e.deltaY < 0 ? 1.1 : 1 / 1.1);
+        if (def.zoomable && screenRef.current === "playing") gameRef.current?.zoomBy?.(e.deltaY < 0 ? 1.1 : 1 / 1.1);
       }}
     >
       {def.scene3d && <canvas ref={glRef} className="game-canvas" aria-hidden />}

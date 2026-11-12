@@ -98,19 +98,19 @@ function drawTrackBed(ctx: Ctx, v: View, game: RailGame) {
   }
 
   for (const side of [-1, 1]) curvedStrip(ctx, v, "#8d8166", side * PLATFORM_X, side * PLATFORM_END, v.near, far, PLATFORM_H);
-  curvedStrip(ctx, v, "#8a7d6e", -BALLAST_HALF - 0.9, BALLAST_HALF + 0.9, v.near, far);
+  // Light gravel cess under and between the three lines.
+  curvedStrip(ctx, v, "#b0a490", -BALLAST_HALF - 0.9, BALLAST_HALF + 0.9, v.near, far);
 
   for (let i = last; i >= first; i--) {
     const z1 = i * SEG + SEG - d;
     const z0 = Math.max(v.near, i * SEG - d);
     if (z1 <= z0) continue;
     const station = inStation(i * SEG);
-    if (i % 2 === 0) curvedStrip(ctx, v, "#7f7266", -BALLAST_HALF, BALLAST_HALF, z0, z1);
     for (const side of [-1, 1]) {
       const x = side * PLATFORM_X;
       if (station) {
         // Concrete platform with the yellow safety line.
-        curvedStrip(ctx, v, i % 2 ? "#c9c3b8" : "#bfb8ac", x, side * PLATFORM_END, z0, z1, PLATFORM_H);
+        curvedStrip(ctx, v, i % 2 ? "#d3cdc2" : "#c9c3b8", x, side * PLATFORM_END, z0, z1, PLATFORM_H);
         curvedStrip(ctx, v, "#f5c518", side * (PLATFORM_X + 0.25), side * (PLATFORM_X + 0.45), z0, z1, PLATFORM_H + 0.01);
         poly(ctx, v, "#8f887c", [[x, 0, z0], [x, PLATFORM_H, z0], [x, PLATFORM_H, z1], [x, 0, z1]]);
       } else {
@@ -121,23 +121,54 @@ function drawTrackBed(ctx: Ctx, v: View, game: RailGame) {
     }
   }
 
-  // Concrete sleepers, nearest drawn last.
+  // Each line sits on its own dark ballast bed, only where it still has rails, so the three
+  // tracks read clearly and a missing stretch shows as bare gravel.
+  for (const lane of [-1, 0, 1] as Track[]) {
+    const cx = lane * LANE_W;
+    for (const [a, b] of railSpans(game, lane, v.near, far)) {
+      curvedStrip(ctx, v, "#5f5852", cx - 1.25, cx + 1.25, a, b, 0.02);
+      curvedStrip(ctx, v, "#6c645c", cx - 0.95, cx + 0.95, a, b, 0.03);
+    }
+  }
+
+  // Concrete sleepers, one batched path per line.
   const sFirst = Math.floor((d + v.near) / SLEEPER_GAP);
   const sLast = Math.ceil((d + SLEEPER_DIST) / SLEEPER_GAP);
   for (const lane of [-1, 0, 1] as Track[]) {
     const cx = lane * LANE_W;
+    ctx.fillStyle = "#cfc8bc";
+    ctx.beginPath();
     for (let i = sLast; i >= sFirst; i--) {
       const z0 = i * SLEEPER_GAP - d;
-      if (z0 < v.near || !game.hasRail(lane, z0, z0 + 0.28)) continue;
-      curvedStrip(ctx, v, "#b3ada4", cx - 1.15, cx + 1.15, z0, z0 + 0.28, 0.06);
+      if (z0 < v.near || !game.hasRail(lane, z0, z0 + 0.26)) continue;
+      const p0 = project(v, cx - 1.05, 0.06, z0);
+      const p1 = project(v, cx + 1.05, 0.06, z0);
+      const p2 = project(v, cx + 1.05, 0.06, z0 + 0.26);
+      const p3 = project(v, cx - 1.05, 0.06, z0 + 0.26);
+      ctx.moveTo(p0.x, p0.y);
+      ctx.lineTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.lineTo(p3.x, p3.y);
+      ctx.closePath();
     }
+    ctx.fill();
   }
+  // Rails: dark web, bright running surface.
   for (const lane of [-1, 0, 1] as Track[]) {
     const cx = lane * LANE_W;
     for (const [a, b] of railSpans(game, lane, v.near, VIEW_DIST)) {
       for (const gx of [-GAUGE_HALF, GAUGE_HALF]) {
-        curvedStrip(ctx, v, "#6b6f76", cx + gx - 0.07, cx + gx + 0.07, a, b, 0.12);
-        curvedStrip(ctx, v, "#f1f4f8", cx + gx - 0.035, cx + gx + 0.035, a, b, 0.16);
+        curvedStrip(ctx, v, "#4d5158", cx + gx - 0.08, cx + gx + 0.08, a, b, 0.12);
+        curvedStrip(ctx, v, "#f4f7fb", cx + gx - 0.035, cx + gx + 0.035, a, b, 0.17);
+      }
+      // End of the line: a red-and-white stop board where the rails run out ahead.
+      if (b < VIEW_DIST - 1) {
+        const e = project(v, cx, 0.2, b);
+        const sz = Math.max(3, 0.9 * e.s);
+        ctx.fillStyle = "#c1272d";
+        ctx.fillRect(e.x - sz, e.y - sz * 0.9, sz * 2, sz * 0.9);
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(e.x - sz, e.y - sz * 0.55, sz * 2, sz * 0.22);
       }
     }
   }

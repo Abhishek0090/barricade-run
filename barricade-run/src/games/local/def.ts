@@ -48,6 +48,7 @@ export const localDef: GameDef<LocalGame> = {
   best: localBest,
   hud: "minimal",
   look3d: true,
+  zoomable: true,
   buttons: [
     { action: "up", label: "POWER ▲", keys: [] },
     { action: "kick", label: "HORN", keys: ["KeyH"] },

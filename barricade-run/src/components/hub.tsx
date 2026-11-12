@@ -24,7 +24,7 @@ function Preview({ def }: { def: GameDef }) {
     const game = def.create({}, true);
     for (let i = 0; i < 60; i++) game.update(0.05);
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const scale = Math.min(window.devicePixelRatio || 1, 1.5);
+    const scale = Math.min(window.devicePixelRatio || 1, 1.25);
     let view = def.makeView(1, 1);
     // 3D games preview in 3D on their own WebGL canvas; the 2D canvas is the fallback.
     let scene3d: Scene3D | null = null;
@@ -52,7 +52,8 @@ function Preview({ def }: { def: GameDef }) {
       canvas.height = Math.max(1, Math.round(h * scale));
       ctx.setTransform(scale, 0, 0, scale, 0, 0);
       view = def.makeView(w, h);
-      scene3d?.resize(w, h, scale);
+      // Thumbnails render at 1x: five live WebGL previews are the heaviest thing on the hub.
+      scene3d?.resize(w, h, 1);
       draw();
     };
     resize();

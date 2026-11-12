@@ -51,10 +51,10 @@ export interface ArcadeGame {
   revive(): boolean;
   /** Analog movement for stick games, each axis -1..1. */
   steer?(x: number, y: number): void;
-  /** Turn the camera (360° look), in radians. */
-  look?(yaw: number, pitch: number): void;
   /** Zoom the camera by a factor (above 1 = closer). */
   zoomBy?(factor: number): void;
+  /** Turn the camera (360° look), in radians. */
+  look?(yaw: number, pitch: number): void;
   /** Train rumble loudness, 0..1, polled every frame. */
   readonly rumble?: number;
 }
@@ -105,7 +105,7 @@ export interface GameDef<G extends ArcadeGame = ArcadeGame> {
   makeView(w: number, h: number): View;
   render(ctx: Ctx, view: View, game: G, clock: number): void;
   meter?(game: G): Meter | null;
-  /** "swipe" (default): lane games. "stick": free movement with keys or a drag joystick (Dangal Showdown). */
+  /** "swipe" (default): lane games. "stick": free movement with keys or a drag joystick (Slam Night). */
   control?: "swipe" | "stick";
   /** Labels for the two numbers on the game-over screen (defaults: Distance, Coins). */
   resultLabels?: [string, string];
@@ -116,8 +116,10 @@ export interface GameDef<G extends ArcadeGame = ArcadeGame> {
   /** Real 3D renderer. When it loads, `render` is only used as a fallback and `overlay3d` draws the HUD on top. */
   scene3d?(canvas: HTMLCanvasElement): Promise<Scene3D<G>>;
   overlay3d?(ctx: Ctx, view: View, game: G, clock: number, project: Project): void;
-  /** 360° camera: mouse drag, the right half of a touch screen, or Q / E turn the view. */
+  /** 360° camera: mouse drag, the right side of a touch screen, or Q / E turn the view. */
   look3d?: boolean;
+  /** Camera zoom: mouse wheel, pinch, or the + / - keys call game.zoomBy. */
+  zoomable?: boolean;
   /** On-screen action buttons (touch screens) and their keyboard keys (KeyboardEvent.code). */
   /** touch: false makes a keyboard-only binding with no on-screen button. */
   buttons?: { action: Action; label: string; keys: string[]; touch?: boolean }[];

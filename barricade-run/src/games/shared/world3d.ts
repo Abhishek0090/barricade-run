@@ -57,7 +57,7 @@ export function createWorld(canvas: HTMLCanvasElement, o: WorldOptions): World {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = o.exposure ?? 1.1;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(o.fog, o.fogNear, o.fogFar);
@@ -88,7 +88,7 @@ export function createWorld(canvas: HTMLCanvasElement, o: WorldOptions): World {
   sun.position.set(...o.sunPos);
   sun.target.position.set(0, 0, -12);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(coarse ? 1024 : 2048, coarse ? 1024 : 2048);
+  sun.shadow.mapSize.set(coarse ? 512 : 1024, coarse ? 512 : 1024);
   const sc = sun.shadow.camera;
   sc.left = -16;
   sc.right = 16;
@@ -110,7 +110,7 @@ export function createWorld(canvas: HTMLCanvasElement, o: WorldOptions): World {
     resize(w, h, pixelRatio) {
       view.w = w;
       view.h = h;
-      renderer.setPixelRatio(Math.min(pixelRatio, 2));
+      renderer.setPixelRatio(Math.min(pixelRatio, coarse ? 1.25 : 1.5));
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
       camera.fov = w < h ? 64 : 52;

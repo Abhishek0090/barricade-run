@@ -6,7 +6,7 @@ import { ARCADE_NAME, AUTHOR } from "@/games/shared/constants";
 import "./globals.css";
 
 const description =
-  "Three street games set in the protest against the NEET paper leak, vote chori and corruption: Barricade Run, Barricade Drive and Rail Roko. Plays on laptop and mobile, works offline.";
+  "Five browser games: Barricade Run, Barricade Drive and Rail Roko set in a street protest, Slam Night championship wrestling, and Mumbai Local, a motorman sim from Kalyan to CSMT. Plays on laptop and mobile, works offline.";
 
 export const metadata: Metadata = {
   title: { default: ARCADE_NAME, template: `%s • ${ARCADE_NAME}` },

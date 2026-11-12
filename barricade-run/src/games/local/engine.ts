@@ -304,15 +304,16 @@ export class LocalGame implements ArcadeGame {
     }
   }
 
+  look(yaw: number, pitch: number) {
+    this.camYaw += yaw;
+    this.camPitch = Math.max(-0.4, Math.min(0.5, this.camPitch + pitch));
+  }
+
   /** Multiplies the zoom (wheel, pinch, + / - keys). */
   zoomBy(factor: number) {
     this.zoom = Math.max(0.45, Math.min(3, this.zoom * factor));
   }
 
-  look(yaw: number, pitch: number) {
-    this.camYaw += yaw;
-    this.camPitch = Math.max(-0.4, Math.min(0.5, this.camPitch + pitch));
-  }
 
   private setNotch(n: number) {
     const was = this.notch;

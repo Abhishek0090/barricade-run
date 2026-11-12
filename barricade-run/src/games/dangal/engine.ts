@@ -3,7 +3,7 @@ import { pick, rand } from "../shared/random";
 import type { Action, ArcadeEvents, ArcadeGame } from "../shared/types";
 
 /**
- * Dangal Showdown: a ring fight. The mat is a plane: x runs left-right (-RING_X..RING_X),
+ * Slam Night: a ring fight. The mat is a plane: x runs left-right (-RING_X..RING_X),
  * z runs from the front ropes (0) to the back ropes (RING_Z). y is height above the mat.
  * Every character is fictional.
  */
@@ -45,80 +45,80 @@ export interface Fighter {
 
 export const HEROES: Fighter[] = [
   {
-    name: "Sher Singh",
-    title: "Farmer of the Akhada",
-    look: { skin: "#b9774a", top: "#138808", trunks: "#1d3557", boots: "#f1f1f1", hair: "turban", hairColor: "#ffcc00", mustache: true, belly: false, glasses: false, jacket: false, extra: "none", size: 1.08 },
+    name: "Thunder Singh",
+    title: "The Punjab Powerhouse",
+    look: { skin: "#b9774a", top: "#1d4ed8", trunks: "#0b1d4d", boots: "#f1f1f1", hair: "turban", hairColor: "#ff9933", mustache: true, belly: false, glasses: false, jacket: false, extra: "none", size: 1.08 },
     power: 1.18,
     speed: 0.94,
-    finisher: "DHOBI PACHHAD",
-    intro: "Kisan ka beta, akhade ka sher!",
+    finisher: "THUNDER DROP",
+    intro: "Can you hear the thunder?!",
   },
   {
-    name: "Rani Dhakad",
-    title: "Tricolour Tigress",
-    look: { skin: "#d89a5e", top: "tricolour", trunks: "#1d3557", boots: "#ff9933", hair: "ponytail", hairColor: "#16110e", mustache: false, belly: false, glasses: false, jacket: false, extra: "none", size: 0.96 },
+    name: "Rani Blaze",
+    title: "Queen of Fire",
+    look: { skin: "#d89a5e", top: "#e63946", trunks: "#1b1b1b", boots: "#ff9933", hair: "ponytail", hairColor: "#16110e", mustache: false, belly: false, glasses: false, jacket: false, extra: "none", size: 0.96 },
     power: 0.96,
     speed: 1.18,
-    finisher: "TIRANGA SLAM",
-    intro: "Medal laungi, jawab bhi!",
+    finisher: "BLAZE BOMB",
+    intro: "The fire is coming for that belt!",
   },
   {
-    name: "Chhotu Pehelwan",
-    title: "The NEET Aspirant",
-    look: { skin: "#e0ac69", top: "#ff6b1a", trunks: "#27466e", boots: "#f7f7f7", hair: "short", hairColor: "#16110e", mustache: false, belly: false, glasses: false, jacket: false, extra: "headband", size: 1 },
+    name: "Kid Cyclone",
+    title: "The High Flyer",
+    look: { skin: "#e0ac69", top: "#22c55e", trunks: "#0f3d2e", boots: "#f7f7f7", hair: "short", hairColor: "#16110e", mustache: false, belly: false, glasses: false, jacket: false, extra: "headband", size: 1 },
     power: 1.04,
     speed: 1.06,
-    finisher: "RE-NEET BOMB",
-    intro: "Paper leak hua, ab tum leak hoge!",
+    finisher: "CYCLONE SPLASH",
+    intro: "Strap in. It's going to get windy!",
   },
 ];
 
-/** The ladder. Fictional satirical villains. */
+/** The title ladder: five fictional heels, ending with the champion. */
 export const VILLAINS: Fighter[] = [
   {
-    name: "Bouncer Bunty",
-    title: "Club Bouncer",
+    name: "Brick Bouncer",
+    title: "The Doorman",
     look: { skin: "#c68642", top: "#111111", trunks: "#333", boots: "#111", hair: "bald", hairColor: "#000", mustache: false, belly: true, glasses: true, jacket: false, extra: "none", size: 1.1 },
     power: 0.85,
     speed: 0.82,
-    finisher: "VIP ENTRY",
-    intro: "Naam list mein nahi hai!",
+    finisher: "BOUNCER BOMB",
+    intro: "You're not on the list!",
   },
   {
-    name: "Constable Danda",
-    title: "Lathi Specialist",
-    look: { skin: "#a5694f", top: "#b59a6a", trunks: "#a08657", boots: "#1a1a1a", hair: "cap", hairColor: "#8a6d3b", mustache: true, belly: false, glasses: false, jacket: false, extra: "none", size: 1.04 },
+    name: "Iron Danda",
+    title: "The Enforcer",
+    look: { skin: "#a5694f", top: "#6b7280", trunks: "#374151", boots: "#1a1a1a", hair: "short", hairColor: "#111", mustache: true, belly: false, glasses: false, jacket: false, extra: "none", size: 1.04 },
     power: 0.95,
     speed: 0.95,
-    finisher: "LATHI DROP",
-    intro: "Section 144 laagu hai!",
+    finisher: "IRON DROP",
+    intro: "Nobody gets past the Enforcer!",
   },
   {
-    name: "Paper Leak Pandey",
-    title: "Exam Mafia",
-    look: { skin: "#e0ac69", top: "#f1f1f1", trunks: "#3d405b", boots: "#5c4d3c", hair: "short", hairColor: "#2b1d14", mustache: true, belly: false, glasses: true, jacket: false, extra: "papers", size: 1 },
+    name: "Venom Vikram",
+    title: "The Viper",
+    look: { skin: "#e0ac69", top: "#4d7c0f", trunks: "#1a2e05", boots: "#5c4d3c", hair: "mohawk", hairColor: "#84cc16", mustache: false, belly: false, glasses: false, jacket: false, extra: "none", size: 1 },
     power: 1.0,
     speed: 1.05,
-    finisher: "LEAK SLAM",
-    intro: "Answer key mere paas hai!",
+    finisher: "VENOM DDT",
+    intro: "One bite and you're done!",
   },
   {
-    name: "EVM Ustaad",
-    title: "Machine Master",
-    look: { skin: "#c68642", top: "#5b5f6a", trunks: "#2b2d42", boots: "#111", hair: "mohawk", hairColor: "#d62828", mustache: false, belly: false, glasses: false, jacket: false, extra: "evm", size: 1.06 },
+    name: "Dr. Destructo",
+    title: "The Mad Scientist",
+    look: { skin: "#c68642", top: "#5b5f6a", trunks: "#2b2d42", boots: "#111", hair: "mohawk", hairColor: "#d62828", mustache: false, belly: false, glasses: true, jacket: false, extra: "none", size: 1.06 },
     power: 1.08,
     speed: 1.08,
-    finisher: "BUTTON PRESS",
-    intro: "Button koi bhi dabao, jeetunga main!",
+    finisher: "SHOCK THERAPY",
+    intro: "Time for your treatment!",
   },
   {
-    name: "Kursi Kumar",
-    title: "Federation Boss",
-    look: { skin: "#d9a074", top: "#f7f5ee", trunks: "#f7f5ee", boots: "#5c3a1a", hair: "bald", hairColor: "#bbb", mustache: true, belly: true, glasses: true, jacket: true, extra: "garland", size: 1.15 },
+    name: "King Kursi",
+    title: "Undisputed Champion",
+    look: { skin: "#d9a074", top: "#7c2d12", trunks: "#facc15", boots: "#5c3a1a", hair: "bald", hairColor: "#bbb", mustache: true, belly: true, glasses: true, jacket: true, extra: "none", size: 1.15 },
     power: 1.2,
     speed: 0.98,
-    finisher: "KURSI CRASH",
-    intro: "Kursi meri hai, aur rahegi!",
+    finisher: "THRONE CRASH",
+    intro: "Bow to the King! This belt never leaves me!",
     chair: true,
   },
 ];
@@ -760,7 +760,7 @@ export class DangalGame implements ArcadeGame {
       this.phaseT = 0;
       this.events.onSound?.("level");
       this.events.onSound?.("cheer");
-      this.say(champ ? "NEW CHAMPION!" : "1... 2... 3! YOU WIN!", champ ? `${this.me.f.name} takes the belt from Kursi Kumar` : `${pinned.f.name} is done. Next opponent coming`, 3.2, true);
+      this.say(champ ? "NEW CHAMPION!" : "1... 2... 3! YOU WIN!", champ ? `${this.me.f.name} takes the belt from King Kursi` : `${pinned.f.name} is done. Next opponent coming`, 3.2, true);
     } else if (this.ghost) {
       this.startMatch();
     } else {

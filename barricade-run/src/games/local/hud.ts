@@ -435,13 +435,16 @@ export function drawLocalHud(ctx: Ctx, v: View, g: LocalGame, clock: number) {
   }
   const nhh = r * 2 + 16;
   notchStrip(ctx, sx + r + 16, v.h - pad - nhh, nhh, g);
-  signalBox(ctx, sx + r + 62, v.h - pad - 112, g, clock);
+  // Phones: the touch buttons own the bottom right, so the signal box sits above the notch strip.
+  const sigX = small ? sx + r - 2 : sx + r + 62;
+  const sigY = small ? v.h - pad - nhh - 8 - 112 : v.h - pad - 112;
+  signalBox(ctx, sigX, sigY, g, clock);
 
   if (h && g.phase === "run") {
     const togo = g.stopAt(h) - g.pos;
     if (togo < 320 && togo > -60) {
       const aw = small ? v.w - 24 : 340;
-      const ay = small ? v.h - pad - nhh - 58 : v.h - pad - 46;
+      const ay = small ? sigY - 54 : v.h - pad - 46;
       const left = sx + r + 150;
       const acx = small ? v.w / 2 : Math.max(left + aw / 2, Math.min(v.w / 2, v.w - 190 - aw / 2));
       stopAssist(ctx, acx, ay, aw, togo);
